@@ -828,6 +828,17 @@ class ScopedContextApplication:
         self._runtime = runtime
         self.scope_id = validate_scope_id(scope_id)
 
+    async def prepare_incremental(self, request: PrepareContextRequest, base_pack=None):
+        """Prepare ordinary context and encode a self-contained pack or delta."""
+        from powercontext.builtin.runtime.context_pack import ContextPack, ContextPackDelta, ContextPackError
+
+        if base_pack is not None and not isinstance(base_pack, ContextPack):
+            raise ContextPackError("base_pack must be a ContextPack")  # noqa: TRY003
+        if base_pack is not None:
+            ContextPack.from_bytes(base_pack.to_bytes())
+        target = ContextPack.from_content((await self.prepare(request)).content)
+        return target if base_pack is None else ContextPackDelta.between(base_pack, target)
+
     async def prepare(
         self,
         request: PrepareContextRequest,
@@ -2667,6 +2678,9 @@ class ScopedTopicMemoryApplication:
                     query_embedding,
                     embedding_timeout_seconds,
                 )
+        result = result.model_copy(
+            update={"hits": await self._runtime.lifecycle.for_scope(self.scope_id).filter_topics(result.hits)}
+        )
         observer = self._runtime._topic_memory_search_observer
         if observer is not None:
             try:
@@ -2978,6 +2992,7 @@ class BuiltinRuntime:
         provider: PowerContextProvider[BuiltinSources, BuiltinArtifacts, BuiltinTriggers],
         capabilities: RuntimeCapabilities,
         code_service: CodeService | None = None,
+        lifecycle_database=None,
         source_window_limit: int = 100,
         context_assembly_max_entries: int = 8,
         recall_sufficiency_policy: RecallSufficiencyPolicy | None = None,
@@ -3109,6 +3124,9 @@ class BuiltinRuntime:
         self.handoff = HandoffApplication(self)
         self.work = WorkApplication(self)
         self.memory = MemoryApplication(self)
+        from powercontext.builtin.runtime.source_lifecycle import SourceLifecycleApplication
+
+        self.lifecycle = SourceLifecycleApplication(self, lifecycle_database)
         self.topic_memory = TopicMemoryApplication(self)
         self.records = RecordApplication(self)
         self.prompts = PromptApplication(self)

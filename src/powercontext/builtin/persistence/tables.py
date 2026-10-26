@@ -86,6 +86,15 @@ def _entry_text_type():
     return Text().with_variant(MEDIUMTEXT(), "mysql")
 
 
+SOURCE_LIFECYCLE_TABLE = Table(
+    "pc_source_lifecycle",
+    SHARED_METADATA,
+    Column("scope_id", identity_string(MAX_SCOPE_ID_LENGTH), primary_key=True),
+    Column("payload", _canonical_payload_type(), nullable=False),
+    ForeignKeyConstraint(("scope_id",), ("pc_scopes.scope_id",), ondelete="CASCADE"),
+)
+
+
 SCOPES_TABLE = Table(
     "pc_scopes",
     SHARED_METADATA,
@@ -896,6 +905,7 @@ RECALL_TOKEN_DAILY_TABLE = Table(
 )
 
 SHARED_TABLES = (
+    SOURCE_LIFECYCLE_TABLE,
     SOURCE_JOURNAL_HEADS_TABLE,
     SOURCES_TABLE,
     ARTIFACTS_TABLE,

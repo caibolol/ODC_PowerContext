@@ -140,7 +140,11 @@ from powercontext.builtin.runtime.decision_model import (
 from powercontext.builtin.runtime.family_processing import FAMILY_BINDINGS, FamilyWorkerSpec, run_family_worker
 from powercontext.builtin.runtime.memory_write_gate import build_memory_write_gate
 from powercontext.builtin.runtime.models import MemorySearchMode, RuntimeCapabilities
-from powercontext.builtin.runtime.processing_discovery import SourceProcessingPendingProvider, enabled_profile_scopes
+from powercontext.builtin.runtime.processing_discovery import (
+    SourceProcessingPendingProvider,
+    enabled_profile_scopes,
+    source_count_scopes,
+)
 from powercontext.builtin.runtime.processing_registry import (
     canonical_processing_manifest,
     dream_operations,
@@ -585,6 +589,7 @@ async def open_builtin_runtime(
             BuiltinRuntime(
                 code_service=await resources.enter_async_context(open_code_service(config.code, config.database)),
                 provider=contexts,
+                lifecycle_database=contexts.database,
                 capabilities=RuntimeCapabilities(
                     memory_extraction=contexts.memory_extraction,
                     experience_generation=contexts.experience_generation,
@@ -787,6 +792,14 @@ def _artifact_processing_bindings(  # noqa: C901 - validate and assemble one reg
                 if family == "skill"
                 else SourceProcessingPendingProvider(contexts.database, binding, family),
                 automatic_scope_filter=enabled_profile_scopes if family == "profile" else None,
+                source_count_filter=partial(
+                    source_count_scopes,
+                    binding_name=binding,
+                    threshold=getattr(config.runtime, f"{prefix}_source_count_threshold"),
+                )
+                if family in {"memory", "topic-memory"}
+                and getattr(config.runtime, f"{prefix}_source_count_threshold") is not None
+                else None,
             )
         )
     _validate_processing_registrations(configured)
@@ -854,7 +867,7 @@ async def _open_artifact_processing_supervisor(
 
 
 @asynccontextmanager
-async def open_builtin_contexts(
+async def open_builtin_contexts(  # noqa: C901 - compose the supported database profiles
     config: BuiltinConfig,
     *,
     candidate_pipeline: CandidatePipeline | None = None,
@@ -964,6 +977,10 @@ async def open_builtin_contexts(
     if embedding_model is not None:
         indexes.append(OceanBaseMemoryVectorIndex(embedding_model.profile))
     index = CompositeMemoryIndex(*indexes)
+    if isinstance(database, SeekDBConfig) and embedding_model is not None:
+        from powercontext.builtin.persistence.seekdb.hybrid_index import SeekDBMemoryHybridIndex
+
+        index = SeekDBMemoryHybridIndex(embedding_model.profile)
     topic_indexes: list[TopicMemoryIndex] = [OceanBaseTopicMemoryFTSIndex()]
     if embedding_model is not None:
         topic_indexes.append(OceanBaseTopicMemoryVectorIndex(embedding_model.profile))
