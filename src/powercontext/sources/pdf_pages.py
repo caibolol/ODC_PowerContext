@@ -37,6 +37,13 @@ class PDFPageInput(BaseModel):
     page_number: int = Field(ge=1)
     text: str
 
+    @field_validator("document_id")
+    @classmethod
+    def require_document_id(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("document_id must not be blank")  # noqa: TRY003
+        return value
+
 
 def parse_pdf_document(value: PDFDocumentInput) -> tuple[PDFPageInput, ...]:
     """Extract every physical page, returning nothing until extraction succeeds."""
@@ -196,6 +203,21 @@ _CONCEPTS = (
     ),
 )
 
+_STATEMENT_HEADINGS = (
+    (
+        r"\b(?:income statements?|p&l|profit|earnings|revenue|margin|ebitda)\b",
+        r"^(?:(?:consolidated|condensed|combined) )*(?:statements? of (?:income|operations|earnings)|income statements?)\b",
+    ),
+    (
+        r"\b(?:cash flows?|capex|ebitda|d\s*&\s*a)\b",
+        r"^(?:(?:consolidated|condensed|combined) )*(?:statements? of cash flows?|cash flows? statements?)\b",
+    ),
+    (
+        r"\b(?:balance sheets?|assets?|liabilit\w*|equity|working capital)\b",
+        r"^(?:(?:consolidated|condensed|combined) )*(?:balance sheets?|statements? of financial position)\b",
+    ),
+)
+
 
 def _words(text: str) -> list[str]:
     return re.findall(r"[a-z]+|\d+", text.lower())
@@ -219,6 +241,14 @@ def _document_match(document: str, question: str) -> tuple[int, int]:
 
 
 async def _pdf_candidates(memory, question: str, raw_terms: list[str], expansions: str):
+    # Only PDF-backed entries may select a report; notes can contain the same headings.
+    pdf_entries = {
+        (record.entry.entry_id, record.entry.entry_version_id)
+        for record in (await memory.list()).entries
+        if any(reference.source_type == "pdf-page" for reference in record.entry.sources)
+    }
+    if not pdf_entries:
+        return {}, set()
     candidates = {}
     # FTS indexes original tokens, not our ranking stems. Keep plural forms and
     # all query terms so long questions do not silently lose their final subject.
@@ -226,7 +256,8 @@ async def _pdf_candidates(memory, question: str, raw_terms: list[str], expansion
     for query in dict.fromkeys(queries):
         result = await memory.search(SearchMemoryRequest(query=query, mode="fts", limit=10000))
         for hit in result.hits:
-            candidates[(hit.entry_id, hit.entry_version_id)] = hit
+            if (hit.entry_id, hit.entry_version_id) in pdf_entries:
+                candidates[(hit.entry_id, hit.entry_version_id)] = hit
     documents = {hit.text.partition("\n")[0] for hit in candidates.values()}
     named_documents = {doc for doc in documents if _document_match(doc, question)[0]}
     # Document IDs are indexed as whole underscore-delimited tokens. Querying
@@ -234,7 +265,8 @@ async def _pdf_candidates(memory, question: str, raw_terms: list[str], expansion
     for document in sorted(named_documents):
         result = await memory.search(SearchMemoryRequest(query=document, mode="fts", limit=10000))
         for hit in result.hits:
-            candidates[(hit.entry_id, hit.entry_version_id)] = hit
+            if (hit.entry_id, hit.entry_version_id) in pdf_entries:
+                candidates[(hit.entry_id, hit.entry_version_id)] = hit
     return candidates, named_documents
 
 
@@ -252,6 +284,18 @@ async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[Memo
     hits = list(candidates.values())
     if named_documents:
         hits = [hit for hit in hits if hit.text.partition("\n")[0] in named_documents]
+    headings = [
+        pattern for topic, pattern in _STATEMENT_HEADINGS if named_documents and re.search(topic, question.lower())
+    ]
+    # Primary tables often mention a requested metric only once among many numbers.
+    statement_pages = [
+        any(
+            re.match(pattern, " ".join(_words(line)))
+            for pattern in headings
+            for line in hit.text.partition("\n")[2].splitlines()[:12]
+        )
+        for hit in hits
+    ]
     document_terms = {term for doc in named_documents for term in _terms(doc)}
     terms = [term for term in dict.fromkeys(_terms(question)) if term not in _FUNCTION_WORDS | document_terms]
     weights = dict.fromkeys(terms, 1.0)
@@ -279,7 +323,8 @@ async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[Memo
     ranked = sorted(
         range(len(hits)),
         key=lambda index: (
-            -_document_match(hits[index].text.partition("\n")[0], question)[1],
+            -_document_match(hits[index].text.partition("\n")[0], question)[1] if named_documents else 0,
+            not statement_pages[index],
             -score(index),
             hits[index].entry_id,
         ),
