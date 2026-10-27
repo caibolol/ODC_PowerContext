@@ -290,7 +290,7 @@ async function run(createdIds) {
 
     console.log('\n[11] Markdown Export Marks Synthetic Sources');
     const exportMarker = 'ExportMarker';
-    const syntheticTitle = '导出标记合成样例 ' + stamp;
+    const syntheticTitle = exportMarker + ' 导出标记合成样例 ' + stamp;
     const realTitle = '导出标记普通条目 ' + stamp;
     const syntheticExport = await httpJson('/api/excerpts', {
       method: 'POST',
@@ -350,6 +350,14 @@ async function run(createdIds) {
       syntheticSection && syntheticSection.includes('https://example.com/synthetic-export'),
       'Markdown export preserves the synthetic source URL'
     );
+    const scoredSearch = await httpJson('/api/search?q=' + encodeURIComponent(exportMarker));
+    const scoredSample = scoredSearch.json.data.find(item => item.id === syntheticExport.json.id);
+    assert(scoredSample && scoredSample.title_score > 0, 'Weighted-score sample matches the title index');
+    const expectedScore = scoredSample && Number(scoredSample.body_score) + 2 * Number(scoredSample.title_score);
+    assert(scoredSample && Math.abs(scoredSample.relevance_score - expectedScore) < 1e-10,
+      'Search API relevance matches the title-weighted database ordering');
+    assert(scoredSample && syntheticSection.includes(`*相关度: ${expectedScore.toFixed(4)}*`),
+      'Markdown export preserves the same weighted relevance as search');
   } finally {
     await new Promise(resolve => server.close(resolve));
   }

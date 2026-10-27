@@ -221,7 +221,11 @@ async function searchExcerpts(query, { limit = 50, tag, state } = {}) {
   params.push(limit);
 
   const [rows] = await p.execute(sql, params);
-  return rows;
+  // 页面、导出与数据库排序使用相同的标题权重。
+  return rows.map(row => ({
+    ...row,
+    relevance_score: Number(row.body_score || 0) + 2 * Number(row.title_score || 0)
+  }));
 }
 
 async function updateReviewState(excerptId, state, notes) {

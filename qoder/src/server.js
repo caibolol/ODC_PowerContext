@@ -286,7 +286,7 @@ app.get('/api/export', async (req, res) => {
       }
       markdown += `\n### 摘录内容\n\n${item.body_text}\n\n`;
       if (item.body_score !== undefined) {
-        markdown += `*相关度: ${(item.body_score + (item.title_score || 0)).toFixed(4)}*\n\n`;
+        markdown += `*相关度: ${item.relevance_score.toFixed(4)}*\n\n`;
       }
       markdown += '---\n\n';
     });

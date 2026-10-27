@@ -60,16 +60,35 @@ EvidenceDesk 是一个基于 Node.js + Express + OceanBase(seekdb) 的研读档�
 ### 环境要求
 
 - Node.js >= 18.0.0
-- OceanBase / MySQL 数据库（已配置 seekdb: 127.0.0.1:2881）
+- seekdb 服务端（本项目在 `5.7.25-OceanBase seekdb-v1.4.0.0` 验证，MySQL 协议端口默认为 `2881`）。需提供 IK 全文解析器；普通 MySQL 不能替代指定的 seekdb。
+
+### 先启动 seekdb
+
+应用使用 MySQL 协议连接独立的 seekdb 服务端，Python 嵌入式客户端不能直接代替该端口。Linux/macOS 安装入口见 [seekdb 官方部署说明](https://github.com/oceanbase/seekdb/blob/master/README_CN.md#快速开始)。安装后按其部署说明启动服务，并创建用于本项目的数据库。
+
+本次验收使用原生 Windows 构建的 `seekdb.exe`，启动参数如下（先将可执行文件及附带 DLL 放在同一目录，替换实际路径，在专用目录运行）：
+
+```powershell
+& 'C:\seekdb\seekdb.exe' --nodaemon --base-dir 'C:\seekdb\evidencedesk-data' --port 2881 --parameter memory_limit=4G --parameter log_disk_size=2G --parameter datafile_size=2G
+```
+
+服务保持运行，在另一个终端通过 MySQL 客户端连接，确认版本并创建数据库：
+
+```bash
+mysql -h127.0.0.1 -P2881 -uroot -p -e "SELECT VERSION(); CREATE DATABASE IF NOT EXISTS evidencedesk DEFAULT CHARACTER SET utf8mb4;"
+```
+
+按部署时设置的账号输入密码；空密码测试实例可直接回车。下方 `.env` 的 `DB_NAME` 改成 `evidencedesk`，用户名和密码与该实例一致。本机历史验证使用现有 `test` 数据库；应用只操作 `odc_qoder_` 前缀的表。
 
 ### 安装步骤
 
 ```bash
-# 1. 进入项目目录
-cd E:/GitHub/ODC_ecosystem/qoder
+# 1. 获取比赛分支并进入项目目录
+git clone --branch 2026-competition-ecosystem --single-branch https://github.com/caibolol/ODC_PowerContext.git
+cd ODC_PowerContext/qoder
 
 # 2. 安装依赖（已生成 package-lock.json）
-npm install
+npm ci
 
 # 3. 配置环境变量（可选，默认值已内置）
 cp .env.example .env
@@ -90,10 +109,11 @@ npm start
 |------|--------|------|
 | DB_HOST | 127.0.0.1 | 数据库主机 |
 | DB_PORT | 2881 | 数据库端口 |
-| DB_NAME | test | 数据库名 |
+| DB_NAME | test | 数据库名；新部署按上文设为 evidencedesk |
 | DB_USER | root | 数据库用户 |
 | DB_PASSWORD | (空) | 数据库密码 |
 | PORT | 18748 | 服务端口 |
+| HOST | 127.0.0.1 | 应用监听地址 |
 
 ## 核心功能
 
@@ -157,7 +177,7 @@ npm start
 
 ### 集成测试
 
-运行完整测试套件（81 项测试，全部通过）：
+运行完整测试套件（最新复核 84 项全部通过，历史 81 项原始记录仍保留）：
 
 ```bash
 npm test
@@ -177,6 +197,7 @@ npm test
 - ✓ 合法数据经 HTTP 正常保存并可全文检索
 - ✓ 测试仅删除本次创建的 ID，原有资料数量保持不变
 - ✓ 统计接口
+- ✓ 搜索 API 与 Markdown 导出的相关度一致，均使用正文分数 + 2 × 标题分数，与数据库排序一致
 
 ### 手动验证步骤
 
@@ -247,7 +268,7 @@ qoder/
 - **相关度排序**：基于 MATCH AGAINST 自然语言模式评分，标题权重 ×2
 - **seekdb IK 解析器**：已在真实 seekdb 验证中英文查询均命中；不使用 MySQL ngram 预设
 - **安全设计**：参数绑定 + HTML/属性转义 + 服务端类型/长度校验
-- **完整测试**：81 项集成测试覆盖核心功能、真实 HTTP 校验、Markdown 导出标记与安全性
+- **完整测试**：84 项集成测试覆盖核心功能、真实 HTTP 校验、Markdown 导出标记、排序分数一致性与安全性
 - **数据保护**：测试仅清理本次创建的 ID，保留既有资料
 
 ## 许可证

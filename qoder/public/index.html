@@ -730,7 +730,7 @@
 
       let scoreHtml = '';
       if (showScore && (item.body_score !== undefined || item.title_score !== undefined)) {
-        const score = (item.body_score || 0) + (item.title_score || 0);
+        const score = Number(item.relevance_score ?? (Number(item.body_score || 0) + 2 * Number(item.title_score || 0)));
         scoreHtml = `<span class="score-badge">相关度: ${score.toFixed(3)}</span>`;
       }
 
