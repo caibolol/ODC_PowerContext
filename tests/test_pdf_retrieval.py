@@ -379,3 +379,118 @@ def test_synonyms_short_fiscal_year_and_phrase_ranking(tmp_path):
                 assert entry.text == "\n".join(expected), question
 
     asyncio.run(run())
+
+
+async def _persist_pdf_pages(tmp_path, pages):
+    registry = SourceDefinitionRegistry((PDF_PAGE_SOURCE_DEFINITION,))
+    config = BuiltinConfig(database=SQLiteConfig(url=f"sqlite+aiosqlite:///{tmp_path / 'statements.db'}"))
+    locations = {}
+    async with open_builtin_runtime(config, candidate_pipeline=EvidencePipeline()) as runtime:
+        assert runtime.scopes is not None
+        scope = await runtime.scopes.create(
+            ScopeDraft(title="Reports", summary="Evidence", idempotency_key="statements")
+        )
+        await runtime.ingestion.register(manifest_for_definition(PDF_PAGE_SOURCE_DEFINITION))
+        for document, number, text in pages:
+            source = await registry.resolve(
+                PDFPageInput(document_id=document, document_sha256="a" * 64, page_number=number, text=text)
+            )
+            locations[source.name] = (document, number)
+            await runtime.ingestion.submit(
+                SubmitSourceObservation(
+                    scope_id=scope.scope_id, observation=project_source_for_transport(registry, source)
+                )
+            )
+        while (await runtime.memory.for_scope(scope.scope_id).flush()).processed:
+            pass
+    return config, scope.scope_id, locations
+
+
+@pytest.mark.parametrize(
+    ("document", "heading"),
+    [
+        ("ACME_2022_10K", "Consolidated Statements of Cash Flows Acme Incorporated and Subsidiary Companies"),
+        ("ACME_2022_10K", "Consolidated Statements of Cash Flows (Dollars in millions)"),
+        ("ACME_2022_10K", "Consolidated Statements of Cash Flows for the years ended December 31, 2022 and 2021"),
+        ("ACME_2022_10K", "Consolidated\nStatements of\nCash Flows"),
+        ("ANNUAL_REPORT", "Consolidated Statements of Cash Flows (Dollars in millions)"),
+    ],
+)
+def test_statement_titles_survive_layout_suffixes_and_unnamed_reports(tmp_path, document, heading):
+    async def run():
+        table = (
+            heading
+            + "\nNet income 150\nDepreciation and amortization 50\nPurchases of property and equipment 100\n"
+            + "Receipts 10 proceeds 30 adjustments 40 reconciliation 50\n" * 70
+        )
+        discussion = (
+            "The consolidated statements of cash flows describe net income, depreciation and amortization, "
+            "purchases of property and equipment. Unadjusted EBITDA less capex equals operating income plus "
+            "depreciation and amortization less capital expenditure. We reconcile EBITDA margin and cash flow "
+            "to income from operations and cash flows from investing and operating activities. "
+        )
+        pages = [
+            (document, 1, "Index to Financial Statements\nConsolidated Statements of Cash Flows 2\nNotes 3"),
+            (document, 2, table),
+            *[(document, number + 3, f"Note {number}: Non-GAAP measures. " + discussion * 3) for number in range(30)],
+        ]
+        config, scope_id, locations = await _persist_pdf_pages(tmp_path, pages)
+        async with open_builtin_runtime(config) as runtime:
+            memory = runtime.memory.for_scope(scope_id)
+            question = "What is Acme's FY2022 unadjusted EBITDA less capex?"
+            for limit in (1, 20):
+                citations = await search_pdf_pages(memory, question, limit=limit)
+                found = []
+                for citation in citations:
+                    record = await memory.get(GetMemoryEntryRequest(citation=citation))
+                    found.append(locations[record.entry.sources[0].source_id])
+                assert len(found) == len(set(found)) == limit
+                assert found[0] == (document, 2)
+
+    asyncio.run(run())
+
+
+def test_report_declared_name_and_stock_symbol_select_the_report(tmp_path):
+    async def run():
+        pages = [
+            (
+                "ACMEWATERWORKS_2022_10K",
+                1,
+                'Acme Water Works Company, Inc. (the "Company" or "Acme Water") provides water services. '
+                'The Company\u2019s  common  stock trades on the stock exchange under\n  the symbol "AQW.".',
+            ),
+            (
+                "ACMEWATERWORKS_2022_10K",
+                2,
+                "CONSOLIDATED STATEMENTS OF INCOME\nOperating income 100 net revenue 300",
+            ),
+            (
+                "ACMEWATERWORKS_2022_10K",
+                3,
+                "CONSOLIDATED STATEMENTS OF CASH FLOWS\nDepreciation and amortization 50 capital expenditures 200",
+            ),
+            *[
+                (
+                    "OTHER_2022_10K",
+                    number + 1,
+                    "Unadjusted EBITDA less capex equals operating income plus depreciation and amortization "
+                    "less capital expenditures. Cash flows and net revenue 2022.",
+                )
+                for number in range(30)
+            ],
+        ]
+        config, scope_id, locations = await _persist_pdf_pages(tmp_path, pages)
+        async with open_builtin_runtime(config) as runtime:
+            memory = runtime.memory.for_scope(scope_id)
+            for company in ("Acme Water", "AQW"):
+                citations = await search_pdf_pages(
+                    memory, f"What is {company}'s FY2022 unadjusted EBITDA less capex?", 20
+                )
+                found = {
+                    locations[(await memory.get(GetMemoryEntryRequest(citation=citation))).entry.sources[0].source_id]
+                    for citation in citations
+                }
+                assert {("ACMEWATERWORKS_2022_10K", 2), ("ACMEWATERWORKS_2022_10K", 3)} <= found
+                assert all(document == "ACMEWATERWORKS_2022_10K" for document, _ in found)
+
+    asyncio.run(run())

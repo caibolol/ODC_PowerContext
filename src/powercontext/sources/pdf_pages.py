@@ -29,6 +29,8 @@ from powercontext.builtin.artifacts.memory.models import MemoryCitation
 from powercontext.builtin.runtime.models import GetMemoryEntryRequest, SearchMemoryRequest
 from powercontext.sources.definitions import AdapterSourceDefinition
 from powercontext.sources.models import Source, SourceMaterialization
+from powercontext.sources.pdf_layout import extract_page_text
+from powercontext.sources.pdf_text import prepare_page_for_extraction
 from powercontext.sources.projections import TEXT_EVIDENCE_PROJECTION_KEY, TextEvidence
 
 
@@ -168,7 +170,7 @@ def parse_pdf_document(value: PDFDocumentInput) -> tuple[PDFPageInput, ...]:
                     document_id=value.document_id,
                     document_sha256=digest,
                     page_number=number,
-                    text=page.extract_text() or "",
+                    text=extract_page_text(prepare_page_for_extraction(page, reader), reader),
                 )
             )
         _validate_compressed_streams(reader)
@@ -421,15 +423,15 @@ _CONCEPTS += (
 _STATEMENT_HEADINGS = (
     (
         r"\b(?:income|p&l|profit|earnings|revenue|sales|margin|ebitda)\b",
-        r"^(?P<prefix>(?:(?:consolidated|condensed|combined) )*)(?:statements? of (?:income|operations|earnings)|income statements?)(?: continued)?$",
+        r"^(?P<prefix>(?:(?:consolidated|condensed|combined) )*)(?:statements? of (?:income|operations|earnings)(?: and (?:comprehensive income|retained earnings))?|income statements?)\b(?P<suffix>.*)$",
     ),
     (
         r"\b(?:cash flows?|capex|capital expenditures?|capital spending|ebitda|d\s*&\s*a|depreciation|amortization|dividends?)\b",
-        r"^(?P<prefix>(?:(?:consolidated|condensed|combined) )*)(?:statements? of cash flows?|cash flows? statements?)(?: continued)?$",
+        r"^(?P<prefix>(?:(?:consolidated|condensed|combined) )*)(?:statements? of cash flows?|cash flows? statements?)\b(?P<suffix>.*)$",
     ),
     (
         r"\b(?:balance sheets?|assets?|liabilit\w*|equity|working capital|receivables?|payables?|inventor(?:y|ies)|debt)\b",
-        r"^(?P<prefix>(?:(?:consolidated|condensed|combined) )*)(?:balance sheets?|statements? of financial position)(?: continued)?$",
+        r"^(?P<prefix>(?:(?:consolidated|condensed|combined) )*)(?:balance sheets?|statements? of financial position)\b(?P<suffix>.*)$",
     ),
 )
 
@@ -508,28 +510,117 @@ def _terms(text: str) -> list[str]:
     return [_canon(word) for word in _words(text)]
 
 
+_COMPANY_SUFFIXES = frozenset({
+    "inc",
+    "incorporated",
+    "corp",
+    "corporation",
+    "company",
+    "holdings",
+    "ltd",
+    "plc",
+    "the",
+})
+
+
+def _name_pattern(name: str) -> str:
+    compact = "".join(_words(name))
+    return r"\b" + r"\s*".join(re.escape(character) for character in compact) + r"\b"
+
+
+def _company_name(document: str) -> str:
+    company = re.split(r"(?:19|20)\d{2}", document.lower(), maxsplit=1)[0]
+    return " ".join(word for word in _words(company) if word not in _COMPANY_SUFFIXES)
+
+
 def _document_match(document: str, question: str) -> tuple[int, int]:
     # The projection's first line is the document ID, not body text. Its company
     # and report year constrain relevance even when page text omits the company.
-    company = re.split(r"(?:19|20)\d{2}", document.lower(), maxsplit=1)[0]
-    company_words = [word for word in _words(company) if word not in {"inc", "corp", "corporation", "the"}]
-    compact_company = "".join(company_words)
-    company_pattern = r"\b" + r"\s*".join(re.escape(character) for character in compact_company) + r"\b"
-    named = bool(compact_company and re.search(company_pattern, " ".join(_words(question))))
+    company = _company_name(document)
+    named = bool(company and re.search(_name_pattern(company), " ".join(_words(question))))
     years = set(re.findall(r"(?:19|20)\d{2}", document))
     requested = set(re.findall(r"(?:19|20)\d{2}", question))
     return int(named), int(bool(years & requested))
 
 
+def _report_aliases(document: str, bodies: list[str]) -> set[str]:
+    """Use names declared by the report, without a company or ticker dictionary."""
+    company = _company_name(document)
+    if not company:
+        return set()
+    text = _fold("\n".join(bodies)).replace("\u201c", '"').replace("\u201d", '"')
+    text = " ".join(text.split())
+    # A defined name follows the registrant name, optionally after legal suffixes.
+    company_pattern = _name_pattern(company).replace(r"\s*", r"[^\w]*")
+    declarations = re.finditer(company_pattern + r"[^()\n]{0,80}\(([^()]{1,160})\)", text)
+    aliases = {name for declaration in declarations for name in re.findall(r'"([^"\n]+)"', declaration[1])}
+    # Stock-symbol declarations refer to the registrant's own common stock.
+    aliases.update(
+        match[1]
+        for match in re.finditer(
+            r"(?:our|the company['\u2019]s) common stock[^.]{0,240}\b(?:under (?:the )?|trading )?symbol\s+\"([a-z0-9.\-]{1,8})\"",
+            text,
+        )
+    )
+    return {
+        name
+        for name in aliases
+        if len("".join(_words(name))) >= 2
+        and set(_words(name))
+        - _FUNCTION_WORDS
+        - _COMPANY_SUFFIXES
+        - {"firm", "group", "registrant", "parent", "we", "us"}
+    }
+
+
+def _statement_suffix(suffix: str, document: str) -> bool:
+    suffix = re.sub(r"^(?:(?:continued|unaudited|audited)\b\s*)+", "", suffix.strip())
+    if not suffix:
+        return True
+    company = _company_name(document)
+    if company and re.match(_name_pattern(company), suffix):
+        return True
+    return bool(
+        re.match(
+            r"(?:in |dollars |amounts |thousands |millions |billions |as of |at [a-z]+ \d|for the years? |years? ended |[a-z]+ \d{1,2} (?:19|20)\d{2})",
+            suffix,
+        )
+    )
+
+
+def _statement_headings(body: str, document: str) -> list[tuple[str, bool]]:
+    lines = [" ".join(_words(line)) for line in body.splitlines() if line.strip()]
+    # Contents pages list statements and numbered notes without their data tables.
+    if re.search(r"\bindex to (?:consolidated )?financial statements\b", " ".join(lines[:12])):
+        return []
+    if sum(bool(re.match(r"(?:note|item) \d+\b", line)) for line in lines) >= 3:
+        return []
+    headings = []
+    for start in range(min(10, len(lines))):
+        for end in range(start + 1, min(start + 3, len(lines)) + 1):
+            header = " ".join(lines[start:end])
+            for topic, pattern in _STATEMENT_HEADINGS:
+                match = re.match(pattern, header)
+                # A standalone number following a heading is a contents-page locator.
+                if (
+                    match
+                    and _statement_suffix(match["suffix"], document)
+                    and (end == len(lines) or not re.fullmatch(r"\d{1,3}", lines[end]))
+                ):
+                    headings.append((topic, bool(match["prefix"])))
+    return list(dict.fromkeys(headings))
+
+
 async def _pdf_candidates(memory, question: str, raw_terms: list[str], expansions: str):
     # Only PDF-backed entries may select a report; notes can contain the same headings.
-    pdf_entries = {
-        (record.entry.entry_id, record.entry.entry_version_id): record.entry.text.partition("\n")[0]
-        for record in (await memory.list()).entries
-        if any(reference.source_type == "pdf-page" for reference in record.entry.sources)
-    }
+    pdf_entries, report_bodies = {}, {}
+    for record in (await memory.list()).entries:
+        if any(reference.source_type == "pdf-page" for reference in record.entry.sources):
+            document, _, body = record.entry.text.partition("\n")
+            pdf_entries[(record.entry.entry_id, record.entry.entry_version_id)] = document
+            report_bodies.setdefault(document, []).append(body)
     if not pdf_entries:
-        return {}, set()
+        return {}, set(), set()
     candidates = {}
     # FTS indexes original tokens, not our ranking stems. Keep plural forms and
     # all query terms so long questions do not silently lose their final subject.
@@ -541,15 +632,23 @@ async def _pdf_candidates(memory, question: str, raw_terms: list[str], expansion
             if (hit.entry_id, hit.entry_version_id) in pdf_entries:
                 candidates[(hit.entry_id, hit.entry_version_id)] = hit
     documents = set(pdf_entries.values())
-    named_documents = {doc for doc in documents if _document_match(doc, question)[0]}
+    normalized_question = " ".join(_words(question))
+    named_documents = {
+        doc
+        for doc in documents
+        if _document_match(doc, question)[0]
+        or any(
+            re.search(_name_pattern(alias), normalized_question) for alias in _report_aliases(doc, report_bodies[doc])
+        )
+    }
     # Document IDs are indexed as whole underscore-delimited tokens. Querying
     # that exact observed ID recovers pages without repeated company names.
-    for document in sorted(named_documents):
+    for document in sorted(named_documents or (documents if len(documents) == 1 else set())):
         result = await memory.search(SearchMemoryRequest(query=document, mode="fts", limit=10000))
         for hit in result.hits:
             if (hit.entry_id, hit.entry_version_id) in pdf_entries:
                 candidates[(hit.entry_id, hit.entry_version_id)] = hit
-    return candidates, named_documents
+    return candidates, named_documents, documents
 
 
 async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[MemoryCitation, ...]:
@@ -561,27 +660,14 @@ async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[Memo
     if not raw_terms or limit == 0:
         return ()
     expansions = " ".join(words for pattern, words in _CONCEPTS if re.search(pattern, question.lower()))
-    candidates, named_documents = await _pdf_candidates(memory, question, raw_terms, expansions)
+    candidates, named_documents, documents = await _pdf_candidates(memory, question, raw_terms, expansions)
     if not candidates:
         return ()
     hits = list(candidates.values())
     if named_documents:
         hits = [hit for hit in hits if hit.text.partition("\n")[0] in named_documents]
     # Primary tables often mention a requested metric only once among many numbers.
-    headers = [
-        "\n".join(
-            " ".join(_words(line)) for line in hit.text.partition("\n")[2].splitlines() if line.strip()
-        ).splitlines()[:6]
-        for hit in hits
-    ]
-    matched_headings = [
-        [
-            (topic, bool(match.group("prefix")))
-            for topic, pattern in _STATEMENT_HEADINGS
-            for match in re.finditer(pattern.replace(" ", r"\s+"), "\n".join(header), re.MULTILINE)
-        ]
-        for header in headers
-    ]
+    matched_headings = [_statement_headings(hit.text.partition("\n")[2], hit.text.partition("\n")[0]) for hit in hits]
     prefixed_documents = {
         hit.text.partition("\n")[0]
         for hit, page_headings in zip(hits, matched_headings, strict=True)
@@ -596,8 +682,9 @@ async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[Memo
         ]
         for hit, page_headings in zip(hits, matched_headings, strict=True)
     ]
+    focused_report = bool(named_documents) or len(documents) == 1
     statement_pages = [
-        bool(named_documents)
+        focused_report
         and any(
             re.search(topic, question.lower()) or re.search(_COMPUTED_METRIC, question.lower())
             for topic in page_headings
@@ -654,7 +741,7 @@ async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[Memo
         ),
     )
     # Reserve part of the page budget for primary tables when a metric is phrased indirectly.
-    reserved = [index for index in ranked if named_documents and primary_pages[index]][: limit // 3]
+    reserved = [index for index in ranked if primary_pages[index]][: limit // 3]
     ranked = sorted(
         dict.fromkeys([*reserved, *ranked]),
         key=lambda index: -_document_match(hits[index].text.partition("\n")[0], question)[1] if named_documents else 0,
