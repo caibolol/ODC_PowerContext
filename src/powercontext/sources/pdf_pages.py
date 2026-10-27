@@ -173,30 +173,91 @@ _FUNCTION_WORDS = frozenset([
 ])
 
 
+# General accounting vocabulary, independent of any report or benchmark question.
+_CONCEPTS = (
+    (
+        r"\b(?:capex|capital expenditure|capital spending)",
+        "capital expenditures purchases property plant equipment additions",
+    ),
+    (r"\b(?:ebitda|d\s*&\s*a|depreciation|amortization)", "operating income depreciation amortization cash flows"),
+    (
+        r"\b(?:geograph|regions?|countries|operates? in)",
+        "geographic segments countries international operations markets",
+    ),
+    (r"\b(?:legal|litigation|lawsuit)", "legal proceedings litigation contingencies claims"),
+    (
+        r"\b(?:income statement|p&l|profit|earnings|revenue|margin|ebitda)",
+        "consolidated statements income operations earnings revenue net sales",
+    ),
+    (r"\b(?:cash flow|capex|ebitda|d\s*&\s*a)", "consolidated statements cash flows investing operating activities"),
+    (
+        r"\b(?:balance sheet|assets?|liabilit|equity|working capital)",
+        "consolidated balance sheets financial position assets liabilities equity",
+    ),
+)
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z]+|\d+", text.lower())
+
+
 def _terms(text: str) -> list[str]:
-    return [
-        word[:-1] if len(word) > 4 and word.endswith("s") else word for word in re.findall(r"[a-z]+|\d+", text.lower())
-    ]
+    return [word[:-1] if len(word) > 4 and word.endswith("s") else word for word in _words(text)]
+
+
+def _document_match(document: str, question: str) -> tuple[int, int]:
+    # The projection's first line is the document ID, not body text. Its company
+    # and report year constrain relevance even when page text omits the company.
+    company = re.split(r"(?:19|20)\d{2}", document.lower(), maxsplit=1)[0]
+    company_words = [word for word in _words(company) if word not in {"inc", "corp", "corporation", "the"}]
+    compact_company = "".join(company_words)
+    compact_question = "".join(_words(question))
+    named = bool(compact_company and compact_company in compact_question)
+    years = set(re.findall(r"(?:19|20)\d{2}", document))
+    requested = set(re.findall(r"(?:19|20)\d{2}", question))
+    return int(named), int(bool(years & requested))
+
+
+async def _pdf_candidates(memory, question: str, raw_terms: list[str], expansions: str):
+    candidates = {}
+    # FTS indexes original tokens, not our ranking stems. Keep plural forms and
+    # all query terms so long questions do not silently lose their final subject.
+    queries = [question, *raw_terms, *dict.fromkeys(_words(expansions))]
+    for query in dict.fromkeys(queries):
+        result = await memory.search(SearchMemoryRequest(query=query, mode="fts", limit=10000))
+        for hit in result.hits:
+            candidates[(hit.entry_id, hit.entry_version_id)] = hit
+    documents = {hit.text.partition("\n")[0] for hit in candidates.values()}
+    named_documents = {doc for doc in documents if _document_match(doc, question)[0]}
+    # Document IDs are indexed as whole underscore-delimited tokens. Querying
+    # that exact observed ID recovers pages without repeated company names.
+    for document in sorted(named_documents):
+        result = await memory.search(SearchMemoryRequest(query=document, mode="fts", limit=10000))
+        for hit in result.hits:
+            candidates[(hit.entry_id, hit.entry_version_id)] = hit
+    return candidates, named_documents
 
 
 async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[MemoryCitation, ...]:
-    """Find real page citations through scoped Memory, then rank page text offline."""
+    """Retrieve scoped evidence, then rank within the requested report offline."""
     if type(limit) is not int or limit < 1:
         raise ValueError("limit must be positive")  # noqa: TRY003
-    terms = [word for word in dict.fromkeys(_terms(question)) if word not in _FUNCTION_WORDS]
-    if not terms:
+    raw_terms = [word for word in dict.fromkeys(_words(question)) if word not in _FUNCTION_WORDS]
+    if not raw_terms:
         return ()
-    candidates = {}
-    # Independent terms recover pages lost by a multi-term admission threshold.
-    queries = [question, *terms[:16]]
-    for query in dict.fromkeys(queries):
-        result = await memory.search(SearchMemoryRequest(query=query, mode="fts", limit=1000))
-        for hit in result.hits:
-            candidates[(hit.entry_id, hit.entry_version_id)] = hit
+    expansions = " ".join(words for pattern, words in _CONCEPTS if re.search(pattern, question.lower()))
+    candidates, named_documents = await _pdf_candidates(memory, question, raw_terms, expansions)
     if not candidates:
         return ()
     hits = list(candidates.values())
-    counts = [Counter(_terms(hit.text)) for hit in hits]
+    if named_documents:
+        hits = [hit for hit in hits if hit.text.partition("\n")[0] in named_documents]
+    document_terms = {term for doc in named_documents for term in _terms(doc)}
+    terms = [term for term in dict.fromkeys(_terms(question)) if term not in _FUNCTION_WORDS | document_terms]
+    weights = dict.fromkeys(terms, 1.0)
+    for term in _terms(expansions):
+        weights.setdefault(term, 0.45)
+    counts = [Counter(_terms(hit.text.partition("\n")[2])) for hit in hits]
     average = sum(sum(count.values()) for count in counts) / len(counts) or 1
     frequency = Counter(term for count in counts for term in count)
 
@@ -204,17 +265,26 @@ async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[Memo
         count = counts[index]
         length = sum(count.values())
         return sum(
-            math.log(1 + (len(counts) - frequency[term] + 0.5) / (frequency[term] + 0.5))
+            weight
+            * math.log(1 + (len(counts) - frequency[term] + 0.5) / (frequency[term] + 0.5))
             * count[term]
             * 2.2
             / (count[term] + 1.2 * (0.25 + 0.75 * length / average))
-            for term in terms
+            for term, weight in weights.items()
             if count[term]
         )
 
     citations = []
     pages = set()
-    for index in sorted(range(len(hits)), key=lambda index: (-score(index), index)):
+    ranked = sorted(
+        range(len(hits)),
+        key=lambda index: (
+            -_document_match(hits[index].text.partition("\n")[0], question)[1],
+            -score(index),
+            hits[index].entry_id,
+        ),
+    )
+    for index in ranked:
         hit = hits[index]
         citation = MemoryCitation(
             memory_ref=hit.memory_ref, entry_id=hit.entry_id, entry_version_id=hit.entry_version_id
