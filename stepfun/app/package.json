@@ -1,0 +1,1 @@
+{"name":"local-seek-knowledge","version":"1.0.0","private":true,"type":"module","scripts":{"dev":"node server.mjs","build":"vite build","test":"node --test test/*.test.mjs"},"dependencies":{"@huggingface/transformers":"3.8.1","express":"4.21.2","seekdb":"1.3.0","vite":"6.1.0"}}

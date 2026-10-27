@@ -1,0 +1,249 @@
+{
+  "createdAt": "2026-10-27T11:15:45.994Z",
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "device": "wasm",
+  "documents": 12,
+  "queries": 8,
+  "rows": [
+    {
+      "dtype": "fp32",
+      "count": 12,
+      "refreshed": true,
+      "embeddingMs": 511.20000000018626,
+      "writeAndRefreshMs": 772.2999999998137,
+      "totalMs": 162883.7999999998,
+      "modelBytes": 90387606,
+      "device": "wasm",
+      "queryEmbeddingMs": 108.60000000009313,
+      "meanSearchMs": 4.654175000003306,
+      "recallAt5": 1,
+      "ndcgAt5": 0.9538662191964322,
+      "details": [
+        {
+          "query": "Why does the sea level rise twice a day?",
+          "expected": [
+            "ocean"
+          ],
+          "ids": [
+            "ocean",
+            "bread",
+            "coral",
+            "plants",
+            "hike"
+          ]
+        },
+        {
+          "query": "How does warming water harm reefs?",
+          "expected": [
+            "coral"
+          ],
+          "ids": [
+            "coral",
+            "ocean",
+            "hike",
+            "plants",
+            "bread"
+          ]
+        },
+        {
+          "query": "How can I prevent laptop battery aging?",
+          "expected": [
+            "battery"
+          ],
+          "ids": [
+            "battery",
+            "sleep",
+            "plants",
+            "hike",
+            "coral"
+          ]
+        },
+        {
+          "query": "What causes dough to expand?",
+          "expected": [
+            "bread"
+          ],
+          "ids": [
+            "bread",
+            "plants",
+            "ocean",
+            "coral",
+            "index"
+          ]
+        },
+        {
+          "query": "Combining semantic and keyword search",
+          "expected": [
+            "database"
+          ],
+          "ids": [
+            "database",
+            "privacy",
+            "index",
+            "hike",
+            "sleep"
+          ]
+        },
+        {
+          "query": "How can a browser run a model without a GPU?",
+          "expected": [
+            "gpu"
+          ],
+          "ids": [
+            "gpu",
+            "privacy",
+            "quant",
+            "sleep",
+            "plants"
+          ]
+        },
+        {
+          "query": "Reduce neural network weight download size",
+          "expected": [
+            "quant"
+          ],
+          "ids": [
+            "gpu",
+            "quant",
+            "privacy",
+            "index",
+            "database"
+          ]
+        },
+        {
+          "query": "How do new documents become searchable?",
+          "expected": [
+            "index"
+          ],
+          "ids": [
+            "index",
+            "privacy",
+            "database",
+            "quant",
+            "gpu"
+          ]
+        }
+      ]
+    },
+    {
+      "dtype": "q8",
+      "count": 12,
+      "refreshed": true,
+      "embeddingMs": 254.70000000018626,
+      "writeAndRefreshMs": 645.8999999999069,
+      "totalMs": 1036.3999999999069,
+      "modelBytes": 22972370,
+      "device": "wasm",
+      "queryEmbeddingMs": 71.10000000009313,
+      "meanSearchMs": 4.664374999985739,
+      "recallAt5": 1,
+      "ndcgAt5": 0.9538662191964322,
+      "details": [
+        {
+          "query": "Why does the sea level rise twice a day?",
+          "expected": [
+            "ocean"
+          ],
+          "ids": [
+            "ocean",
+            "bread",
+            "coral",
+            "plants",
+            "hike"
+          ]
+        },
+        {
+          "query": "How does warming water harm reefs?",
+          "expected": [
+            "coral"
+          ],
+          "ids": [
+            "coral",
+            "ocean",
+            "hike",
+            "plants",
+            "bread"
+          ]
+        },
+        {
+          "query": "How can I prevent laptop battery aging?",
+          "expected": [
+            "battery"
+          ],
+          "ids": [
+            "battery",
+            "sleep",
+            "plants",
+            "hike",
+            "coral"
+          ]
+        },
+        {
+          "query": "What causes dough to expand?",
+          "expected": [
+            "bread"
+          ],
+          "ids": [
+            "bread",
+            "plants",
+            "ocean",
+            "coral",
+            "index"
+          ]
+        },
+        {
+          "query": "Combining semantic and keyword search",
+          "expected": [
+            "database"
+          ],
+          "ids": [
+            "database",
+            "privacy",
+            "index",
+            "hike",
+            "ocean"
+          ]
+        },
+        {
+          "query": "How can a browser run a model without a GPU?",
+          "expected": [
+            "gpu"
+          ],
+          "ids": [
+            "gpu",
+            "privacy",
+            "quant",
+            "sleep",
+            "plants"
+          ]
+        },
+        {
+          "query": "Reduce neural network weight download size",
+          "expected": [
+            "quant"
+          ],
+          "ids": [
+            "gpu",
+            "quant",
+            "index",
+            "privacy",
+            "database"
+          ]
+        },
+        {
+          "query": "How do new documents become searchable?",
+          "expected": [
+            "index"
+          ],
+          "ids": [
+            "index",
+            "privacy",
+            "database",
+            "quant",
+            "hike"
+          ]
+        }
+      ]
+    }
+  ]
+}
