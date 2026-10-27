@@ -212,8 +212,19 @@ _FUNCTION_WORDS = frozenset([
 ])
 
 
+# Computed metrics need the underlying statements even when their names never appear there.
+_COMPUTED_METRIC = (
+    r"\b(?:ratios?|turnover|returns? on|yields?|liquidity|leverage|solvency|coverage|cash conversion)\b"
+    r"|\bdays\b.*\b(?:sales|inventory|receivables?|payables?|collect)\b"
+    r"|\b(?:sales|inventory|receivables?|payables?|collection)\b.*\bdays\b"
+)
+
 # General accounting vocabulary, independent of any report or benchmark question.
 _CONCEPTS = (
+    (
+        _COMPUTED_METRIC,
+        "consolidated statements income operations earnings cash flows balance sheets financial position",
+    ),
     (
         r"\b(?:capex|capital expenditure|capital spending)",
         "capital expenditures purchases property plant equipment additions",
@@ -237,15 +248,15 @@ _CONCEPTS = (
 
 _STATEMENT_HEADINGS = (
     (
-        r"\b(?:income statements?|p&l|profit|earnings|revenue|margin|ebitda)\b",
+        r"\b(?:income|p&l|profit|earnings|revenue|sales|margin|ebitda)\b",
         r"^(?:(?:consolidated|condensed|combined) )*(?:statements? of (?:income|operations|earnings)|income statements?)\b",
     ),
     (
-        r"\b(?:cash flows?|capex|ebitda|d\s*&\s*a)\b",
+        r"\b(?:cash flows?|capex|capital expenditures?|capital spending|ebitda|d\s*&\s*a|depreciation|amortization|dividends?)\b",
         r"^(?:(?:consolidated|condensed|combined) )*(?:statements? of cash flows?|cash flows? statements?)\b",
     ),
     (
-        r"\b(?:balance sheets?|assets?|liabilit\w*|equity|working capital)\b",
+        r"\b(?:balance sheets?|assets?|liabilit\w*|equity|working capital|receivables?|payables?|inventor(?:y|ies)|debt)\b",
         r"^(?:(?:consolidated|condensed|combined) )*(?:balance sheets?|statements? of financial position)\b",
     ),
 )
@@ -275,7 +286,7 @@ def _document_match(document: str, question: str) -> tuple[int, int]:
 async def _pdf_candidates(memory, question: str, raw_terms: list[str], expansions: str):
     # Only PDF-backed entries may select a report; notes can contain the same headings.
     pdf_entries = {
-        (record.entry.entry_id, record.entry.entry_version_id)
+        (record.entry.entry_id, record.entry.entry_version_id): record.entry.text.partition("\n")[0]
         for record in (await memory.list()).entries
         if any(reference.source_type == "pdf-page" for reference in record.entry.sources)
     }
@@ -290,7 +301,7 @@ async def _pdf_candidates(memory, question: str, raw_terms: list[str], expansion
         for hit in result.hits:
             if (hit.entry_id, hit.entry_version_id) in pdf_entries:
                 candidates[(hit.entry_id, hit.entry_version_id)] = hit
-    documents = {hit.text.partition("\n")[0] for hit in candidates.values()}
+    documents = set(pdf_entries.values())
     named_documents = {doc for doc in documents if _document_match(doc, question)[0]}
     # Document IDs are indexed as whole underscore-delimited tokens. Querying
     # that exact observed ID recovers pages without repeated company names.
@@ -304,10 +315,10 @@ async def _pdf_candidates(memory, question: str, raw_terms: list[str], expansion
 
 async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[MemoryCitation, ...]:
     """Retrieve scoped evidence, then rank within the requested report offline."""
-    if type(limit) is not int or limit < 1:
-        raise ValueError("limit must be positive")  # noqa: TRY003
+    if type(limit) is not int or limit < 0:
+        raise ValueError("limit must be nonnegative")  # noqa: TRY003
     raw_terms = [word for word in dict.fromkeys(_words(question)) if word not in _FUNCTION_WORDS]
-    if not raw_terms:
+    if not raw_terms or limit == 0:
         return ()
     expansions = " ".join(words for pattern, words in _CONCEPTS if re.search(pattern, question.lower()))
     candidates, named_documents = await _pdf_candidates(memory, question, raw_terms, expansions)
@@ -317,16 +328,16 @@ async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[Memo
     if named_documents:
         hits = [hit for hit in hits if hit.text.partition("\n")[0] in named_documents]
     headings = [
-        pattern for topic, pattern in _STATEMENT_HEADINGS if named_documents and re.search(topic, question.lower())
+        pattern
+        for topic, pattern in _STATEMENT_HEADINGS
+        if named_documents and (re.search(topic, question.lower()) or re.search(_COMPUTED_METRIC, question.lower()))
     ]
     # Primary tables often mention a requested metric only once among many numbers.
+    headers = [
+        "\n".join(" ".join(_words(line)) for line in hit.text.partition("\n")[2].splitlines()[:12]) for hit in hits
+    ]
     statement_pages = [
-        any(
-            re.match(pattern, " ".join(_words(line)))
-            for pattern in headings
-            for line in hit.text.partition("\n")[2].splitlines()[:12]
-        )
-        for hit in hits
+        any(re.search(pattern.replace(" ", r"\s+"), header, re.MULTILINE) for pattern in headings) for header in headers
     ]
     document_terms = {term for doc in named_documents for term in _terms(doc)}
     terms = [term for term in dict.fromkeys(_terms(question)) if term not in _FUNCTION_WORDS | document_terms]

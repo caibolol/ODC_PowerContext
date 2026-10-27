@@ -118,6 +118,7 @@ def test_pdf_report_identity_vocabulary_and_plural_recall(tmp_path):
             entry = (await memory.get(GetMemoryEntryRequest(citation=citations[0]))).entry
             assert "Rare contingencies" in entry.text
             assert not await search_pdf_pages(runtime.memory.for_scope(other.scope_id), "Acme capex")
+            assert not await search_pdf_pages(memory, "Acme capex", limit=0)
             citations = await search_pdf_pages(memory, "What is FY2022 capex for Fictional?", limit=1)
             assert len(citations) == 1
             entry = (await memory.get(GetMemoryEntryRequest(citation=citations[0]))).entry
@@ -138,6 +139,61 @@ def test_pdf_report_identity_vocabulary_and_plural_recall(tmp_path):
 def test_pdf_page_rejects_blank_document_id(document_id):
     with pytest.raises(ValueError):
         PDFPageInput(document_id=document_id, document_sha256="a" * 64, page_number=1, text="")
+
+
+def test_calculated_metrics_retrieve_the_underlying_statements(tmp_path):
+    async def run():
+        registry = SourceDefinitionRegistry((PDF_PAGE_SOURCE_DEFINITION,))
+        texts = [
+            "CONSOLIDATED STATEMENTS\nOF INCOME\nNet sales 123 cost of sales 45 net earnings 67",
+            "CONSOLIDATED BALANCE\nSHEETS\nCurrent assets 456 inventories 78 receivables 12 liabilities 34",
+            "CONSOLIDATED STATEMENTS OF CASH FLOWS\nCash dividends paid 56 payments to acquire machinery 99 D&A 20",
+            *[
+                f"Management discussion {number}. Our current ratio, quick ratio, return on assets, dividend "
+                "payout ratio, inventory turnover and days to collect receivables were satisfactory."
+                for number in range(40)
+            ],
+        ]
+        config = BuiltinConfig(database=SQLiteConfig(url=f"sqlite+aiosqlite:///{tmp_path / 'metrics.db'}"))
+        async with open_builtin_runtime(config, candidate_pipeline=EvidencePipeline()) as runtime:
+            assert runtime.scopes is not None
+            scope = await runtime.scopes.create(
+                ScopeDraft(title="Metrics", summary="Reports", idempotency_key="metrics")
+            )
+            await runtime.ingestion.register(manifest_for_definition(PDF_PAGE_SOURCE_DEFINITION))
+            for number, text in enumerate(texts, 1):
+                source = await registry.resolve(
+                    PDFPageInput(document_id="ACME_2022_10K", document_sha256="a" * 64, page_number=number, text=text)
+                )
+                await runtime.ingestion.submit(
+                    SubmitSourceObservation(
+                        scope_id=scope.scope_id, observation=project_source_for_transport(registry, source)
+                    )
+                )
+            memory = runtime.memory.for_scope(scope.scope_id)
+            while (await memory.flush()).processed:
+                pass
+        async with open_builtin_runtime(config) as runtime:
+            memory = runtime.memory.for_scope(scope.scope_id)
+            for question, required in (
+                ("What is Acme's FY2022 current ratio?", (1,)),
+                ("What is Acme's FY2022 quick ratio?", (1,)),
+                ("What is Acme's FY2022 return on assets?", (0, 1)),
+                ("What is Acme's FY2022 inventory turnover?", (0, 1)),
+                ("What is Acme's FY2022 dividend payout ratio?", (0, 2)),
+                ("How many days does Acme take to collect receivables in FY2022?", (0, 1)),
+                ("What is Acme's FY2022 net income?", (0,)),
+                ("What are Acme's FY2022 capital expenditures?", (2,)),
+                ("What is Acme's FY2022 depreciation?", (2,)),
+            ):
+                citations = await search_pdf_pages(memory, question, limit=20)
+                returned = {
+                    (await memory.get(GetMemoryEntryRequest(citation=citation))).entry.text for citation in citations
+                }
+                assert len(citations) == len(returned) == 20
+                assert all(f"ACME_2022_10K\n{texts[index]}" in returned for index in required), question
+
+    asyncio.run(run())
 
 
 def test_pdf_revisions_keep_exact_citations_after_restart(tmp_path):
