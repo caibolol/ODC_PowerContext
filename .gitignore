@@ -2,3 +2,4 @@ node_modules/
 dist/
 .env
 *.log
+__pycache__/

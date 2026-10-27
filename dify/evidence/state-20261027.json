@@ -1,0 +1,26 @@
+{
+  "state": {
+    "room": 3,
+    "hints": 0,
+    "score": 30,
+    "history": [
+      {
+        "room": 0,
+        "answer": "混合检索",
+        "correct": true
+      },
+      {
+        "room": 1,
+        "answer": "持久化",
+        "correct": true
+      },
+      {
+        "room": 2,
+        "answer": "乐观锁",
+        "correct": true
+      }
+    ],
+    "attempts": 3
+  },
+  "revision": 5
+}
