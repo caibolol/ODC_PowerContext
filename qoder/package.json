@@ -1,0 +1,27 @@
+{
+  "name": "evidence-desk",
+  "version": "1.0.0",
+  "description": "研读档案 - OceanBase 数据库大赛 Qoder 赛道作品",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node test/integration.test.js",
+    "db:init": "node scripts/init-db.js"
+  },
+  "keywords": [
+    "oceanbase",
+    "fulltext-search",
+    "evidence-management"
+  ],
+  "author": "参赛者（Qoder辅助开发）",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "mysql2": "^3.11.0",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
