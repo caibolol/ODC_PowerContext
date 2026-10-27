@@ -185,6 +185,8 @@ def test_calculated_metrics_retrieve_the_underlying_statements(tmp_path):
                 ("What is Acme's FY2022 net income?", (0,)),
                 ("What are Acme's FY2022 capital expenditures?", (2,)),
                 ("What is Acme's FY2022 depreciation?", (2,)),
+                ("How much did Acme earn in FY2022?", (0,)),
+                ("What was Acme's FY2022 cash generated from operations?", (2,)),
             ):
                 citations = await search_pdf_pages(memory, question, limit=20)
                 returned = {
@@ -192,6 +194,95 @@ def test_calculated_metrics_retrieve_the_underlying_statements(tmp_path):
                 }
                 assert len(citations) == len(returned) == 20
                 assert all(f"ACME_2022_10K\n{texts[index]}" in returned for index in required), question
+
+    asyncio.run(run())
+
+
+def test_primary_statement_titles_fall_back_per_document_and_keep_year_priority(tmp_path):
+    async def run():
+        registry = SourceDefinitionRegistry((PDF_PAGE_SOURCE_DEFINITION,))
+        pages = []
+        for document, titles in (
+            (
+                "ACME_2022_10K",
+                (
+                    "CONSOLIDATED STATEMENTS\nOF INCOME",
+                    "CONDENSED CONSOLIDATED BALANCE\nSHEETS",
+                    "COMBINED STATEMENTS OF CASH FLOWS",
+                ),
+            ),
+            (
+                "BETA_2022_10K",
+                ("INCOME STATEMENTS", "BALANCE SHEETS", "CASH FLOWS STATEMENTS"),
+            ),
+            (
+                "ACME_2021_10K",
+                (
+                    "CONSOLIDATED STATEMENTS OF INCOME",
+                    "CONSOLIDATED BALANCE SHEETS",
+                    "CONSOLIDATED STATEMENTS OF CASH FLOWS",
+                ),
+            ),
+        ):
+            pages.extend(
+                (document, number, f"{title}\nNet income 100 assets 200 debt 50 cash from operations 75")
+                for number, title in enumerate(titles, 1)
+            )
+            pages.extend(
+                (
+                    document,
+                    number,
+                    ("Balance Sheet\n" if document == "ACME_2022_10K" else "Notes and discussion\n")
+                    + ("Net debt effective tax rate and financial performance " * 20).rstrip(),
+                )
+                for number in range(10, 50)
+            )
+        config = BuiltinConfig(database=SQLiteConfig(url=f"sqlite+aiosqlite:///{tmp_path / 'titles.db'}"))
+        source_pages = {}
+        async with open_builtin_runtime(config, candidate_pipeline=EvidencePipeline()) as runtime:
+            assert runtime.scopes is not None
+            scope = await runtime.scopes.create(ScopeDraft(title="Titles", summary="Reports", idempotency_key="titles"))
+            await runtime.ingestion.register(manifest_for_definition(PDF_PAGE_SOURCE_DEFINITION))
+            for document, number, text in pages:
+                source = await registry.resolve(
+                    PDFPageInput(document_id=document, document_sha256="a" * 64, page_number=number, text=text)
+                )
+                source_pages[source.name] = (document, number, text)
+                await runtime.ingestion.submit(
+                    SubmitSourceObservation(
+                        scope_id=scope.scope_id, observation=project_source_for_transport(registry, source)
+                    )
+                )
+            memory = runtime.memory.for_scope(scope.scope_id)
+            while (await memory.flush()).processed:
+                pass
+        async with open_builtin_runtime(config) as runtime:
+            memory = runtime.memory.for_scope(scope.scope_id)
+
+            async def locations(question, limit=20):
+                citations = await search_pdf_pages(memory, question, limit=limit)
+                found = []
+                for citation in citations:
+                    entry = (await memory.get(GetMemoryEntryRequest(citation=citation))).entry
+                    document, number, text = source_pages[entry.sources[0].source_id]
+                    assert entry.text == f"{document}\n{text}"
+                    found.append((document, number))
+                assert len(citations) == len(set(found)) == limit
+                return found
+
+            for company, document in (("Acme", "ACME_2022_10K"), ("Beta", "BETA_2022_10K")):
+                for limit in (1, 3, 20):
+                    found = await locations(f"What is {company}'s FY2022 net debt?", limit)
+                    assert found[0] == (document, 2)
+                    assert all(doc == document for doc, _ in found)
+                found = await locations(f"What was {company}'s FY2022 effective tax rate?")
+                assert set(found[:3]) == {(document, number) for number in (1, 2, 3)}
+                assert all(doc == document for doc, _ in found)
+            found = await locations("What is Acme and Beta's FY2022 net debt?")
+            assert set(found[:6]) == {
+                (document, number) for document in ("ACME_2022_10K", "BETA_2022_10K") for number in (1, 2, 3)
+            }
+            assert all(document.endswith("2022_10K") for document, _ in found)
 
     asyncio.run(run())
 

@@ -9,10 +9,19 @@ import math
 import re
 import zlib
 from collections import Counter
+from copy import copy
 
 from pydantic import BaseModel, Field, field_validator
 from pypdf import PdfReader, get_configuration
-from pypdf.generic import ArrayObject, EncodedStreamObject, NameObject
+from pypdf.generic import (
+    ArrayObject,
+    ContentStream,
+    DictionaryObject,
+    EncodedStreamObject,
+    NameObject,
+    NullObject,
+    StreamObject,
+)
 
 from powercontext.builtin.artifacts.memory.models import MemoryCitation
 from powercontext.builtin.runtime.models import GetMemoryEntryRequest, SearchMemoryRequest
@@ -47,8 +56,24 @@ class PDFPageInput(BaseModel):
         return value
 
 
+def _complete_encoded_stream(name: str, data: bytes) -> bool:
+    if name in ("/FlateDecode", "/Fl"):
+        decoder = zlib.decompressobj()
+        decoder.decompress(data, max_length=get_configuration().zlib_maximum_output_length)
+        return decoder.eof
+    if name in ("/ASCII85Decode", "/A85"):
+        return data.rstrip(b"\x00\t\n\f\r ").endswith(b"~>")
+    if name in ("/ASCIIHexDecode", "/AHx"):
+        return b">" in data
+    offset = 0
+    while offset < len(data) and data[offset] != 128:
+        length = data[offset]
+        offset += length + 2 if length < 128 else 2
+    return offset < len(data) and data[offset] == 128
+
+
 def _validate_compressed_streams(reader: PdfReader) -> None:
-    # pypdf can silently return partial text from truncated Flate streams.
+    # pypdf tolerates missing stream end markers even in strict mode.
     for stream in tuple(reader.resolved_objects.values()):
         if not isinstance(stream, EncodedStreamObject):
             continue
@@ -56,7 +81,16 @@ def _validate_compressed_streams(reader: PdfReader) -> None:
         if not isinstance(filters, ArrayObject):
             filters = ArrayObject([filters])
         for index, name in enumerate(filters):
-            if name not in ("/FlateDecode", "/Fl"):
+            if name not in (
+                "/FlateDecode",
+                "/Fl",
+                "/ASCII85Decode",
+                "/A85",
+                "/ASCIIHexDecode",
+                "/AHx",
+                "/RunLengthDecode",
+                "/RL",
+            ):
                 continue
             data = stream._data
             if index:
@@ -65,10 +99,44 @@ def _validate_compressed_streams(reader: PdfReader) -> None:
                 prefix._data = data
                 prefix[NameObject("/Filter")] = ArrayObject(filters[:index])
                 data = prefix.get_data()
-            decoder = zlib.decompressobj()
-            decoder.decompress(data, max_length=get_configuration().zlib_maximum_output_length)
-            if not decoder.eof:
-                raise ValueError("Incomplete compressed PDF stream")  # noqa: TRY003
+            if not _complete_encoded_stream(name, data):
+                raise ValueError("Incomplete encoded PDF stream")  # noqa: TRY003
+
+
+def _validate_content(reader: PdfReader, content, resources, active: set[int]) -> DictionaryObject:
+    content = content.get_object()
+    if isinstance(content, NullObject):
+        return resources
+    streams = content if isinstance(content, ArrayObject) else (content,)
+    if any(not isinstance(stream.get_object(), (StreamObject, NullObject)) for stream in streams):
+        raise TypeError("Invalid PDF content stream")  # noqa: TRY003
+    forms = {}
+    for operands, operator in ContentStream(content, reader).operations:
+        if operator not in (b"Tf", b"Do"):
+            continue
+        font = operator == b"Tf"
+        if len(operands) != (2 if font else 1) or not isinstance(operands[0], NameObject):
+            raise ValueError("Invalid PDF resource invocation")  # noqa: TRY003
+        resource = resources["/Font" if font else "/XObject"][operands[0]]
+        if not isinstance(resource, DictionaryObject if font else StreamObject) or not resource:
+            raise TypeError("Invalid PDF resource")  # noqa: TRY003
+        if font or resource["/Subtype"] != "/Form" or operands[0] in forms:
+            continue
+        identity = id(resource)
+        if identity in active:
+            raise ValueError("Cyclic PDF form invocation")  # noqa: TRY003
+        # pypdf needs explicit resources; clone per caller so shared forms keep the right fonts.
+        form = copy(resource)
+        form[NameObject("/Resources")] = _validate_content(
+            reader, resource, resource.get("/Resources", resources).get_object(), active | {identity}
+        )
+        forms[operands[0]] = form
+    if forms:
+        xobjects = DictionaryObject(resources["/XObject"])
+        xobjects.update(forms)
+        resources = DictionaryObject(resources)
+        resources[NameObject("/XObject")] = xobjects
+    return resources
 
 
 def parse_pdf_document(value: PDFDocumentInput) -> tuple[PDFPageInput, ...]:
@@ -84,19 +152,27 @@ def parse_pdf_document(value: PDFDocumentInput) -> tuple[PDFPageInput, ...]:
         reader = PdfReader(io.BytesIO(value.content), strict=True)
         if reader.is_encrypted and not reader.decrypt(""):
             raise ValueError("PDF requires a user password")  # noqa: TRY003, TRY301
-        pages = tuple(
-            PDFPageInput(
-                document_id=value.document_id,
-                document_sha256=digest,
-                page_number=number,
-                text=page.extract_text() or "",
+        pages = []
+        for number, page in enumerate(reader.pages, 1):
+            # Extraction swallows broken Form XObjects; parse their operations first.
+            if "/Contents" in page:
+                resources = _validate_content(
+                    reader, page["/Contents"], page.get_inherited("/Resources", DictionaryObject()), set()
+                )
+                page = copy(page)
+                page[NameObject("/Resources")] = resources
+            pages.append(
+                PDFPageInput(
+                    document_id=value.document_id,
+                    document_sha256=digest,
+                    page_number=number,
+                    text=page.extract_text() or "",
+                )
             )
-            for number, page in enumerate(reader.pages, 1)
-        )
         _validate_compressed_streams(reader)
     except Exception as error:
         raise ValueError("Unable to extract the complete PDF") from error  # noqa: TRY003
-    return pages
+    return tuple(pages)
 
 
 class PDFPageSource(Source):
@@ -209,6 +285,19 @@ _FUNCTION_WORDS = frozenset([
     "change",
     "between",
     "during",
+    "s",
+    "answer",
+    "respond",
+    "response",
+    "give",
+    "using",
+    "use",
+    "shown",
+    "details",
+    "perspective",
+    "investment",
+    "analyst",
+    "assuming",
 ])
 
 
@@ -249,15 +338,15 @@ _CONCEPTS = (
 _STATEMENT_HEADINGS = (
     (
         r"\b(?:income|p&l|profit|earnings|revenue|sales|margin|ebitda)\b",
-        r"^(?:(?:consolidated|condensed|combined) )*(?:statements? of (?:income|operations|earnings)|income statements?)\b",
+        r"^(?P<prefix>(?:(?:consolidated|condensed|combined) )*)(?:statements? of (?:income|operations|earnings)|income statements?)(?: continued)?$",
     ),
     (
         r"\b(?:cash flows?|capex|capital expenditures?|capital spending|ebitda|d\s*&\s*a|depreciation|amortization|dividends?)\b",
-        r"^(?:(?:consolidated|condensed|combined) )*(?:statements? of cash flows?|cash flows? statements?)\b",
+        r"^(?P<prefix>(?:(?:consolidated|condensed|combined) )*)(?:statements? of cash flows?|cash flows? statements?)(?: continued)?$",
     ),
     (
         r"\b(?:balance sheets?|assets?|liabilit\w*|equity|working capital|receivables?|payables?|inventor(?:y|ies)|debt)\b",
-        r"^(?:(?:consolidated|condensed|combined) )*(?:balance sheets?|statements? of financial position)\b",
+        r"^(?P<prefix>(?:(?:consolidated|condensed|combined) )*)(?:balance sheets?|statements? of financial position)(?: continued)?$",
     ),
 )
 
@@ -327,18 +416,44 @@ async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[Memo
     hits = list(candidates.values())
     if named_documents:
         hits = [hit for hit in hits if hit.text.partition("\n")[0] in named_documents]
-    headings = [
-        pattern
-        for topic, pattern in _STATEMENT_HEADINGS
-        if named_documents and (re.search(topic, question.lower()) or re.search(_COMPUTED_METRIC, question.lower()))
-    ]
     # Primary tables often mention a requested metric only once among many numbers.
     headers = [
-        "\n".join(" ".join(_words(line)) for line in hit.text.partition("\n")[2].splitlines()[:12]) for hit in hits
+        "\n".join(
+            " ".join(_words(line)) for line in hit.text.partition("\n")[2].splitlines() if line.strip()
+        ).splitlines()[:6]
+        for hit in hits
+    ]
+    matched_headings = [
+        [
+            (topic, bool(match.group("prefix")))
+            for topic, pattern in _STATEMENT_HEADINGS
+            for match in re.finditer(pattern.replace(" ", r"\s+"), "\n".join(header), re.MULTILINE)
+        ]
+        for header in headers
+    ]
+    prefixed_documents = {
+        hit.text.partition("\n")[0]
+        for hit, page_headings in zip(hits, matched_headings, strict=True)
+        if any(prefixed for _, prefixed in page_headings)
+    }
+    # Bare statement titles can be note tables; use them only in reports without prefixed titles.
+    primary_headings = [
+        [
+            topic
+            for topic, prefixed in page_headings
+            if prefixed or hit.text.partition("\n")[0] not in prefixed_documents
+        ]
+        for hit, page_headings in zip(hits, matched_headings, strict=True)
     ]
     statement_pages = [
-        any(re.search(pattern.replace(" ", r"\s+"), header, re.MULTILINE) for pattern in headings) for header in headers
+        bool(named_documents)
+        and any(
+            re.search(topic, question.lower()) or re.search(_COMPUTED_METRIC, question.lower())
+            for topic in page_headings
+        )
+        for page_headings in primary_headings
     ]
+    primary_pages = [bool(page_headings) for page_headings in primary_headings]
     document_terms = {term for doc in named_documents for term in _terms(doc)}
     terms = [term for term in dict.fromkeys(_terms(question)) if term not in _FUNCTION_WORDS | document_terms]
     weights = dict.fromkeys(terms, 1.0)
@@ -371,6 +486,12 @@ async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[Memo
             -score(index),
             hits[index].entry_id,
         ),
+    )
+    # Reserve part of the page budget for primary tables when a metric is phrased indirectly.
+    reserved = [index for index in ranked if named_documents and primary_pages[index]][: limit // 3]
+    ranked = sorted(
+        dict.fromkeys([*reserved, *ranked]),
+        key=lambda index: -_document_match(hits[index].text.partition("\n")[0], question)[1] if named_documents else 0,
     )
     for index in ranked:
         hit = hits[index]
