@@ -132,6 +132,21 @@ def test_limits_are_measured_after_normalization() -> None:
         validate_identifier("x" * 129)
 
 
+def test_complete_source_evidence_has_a_separate_bounded_budget() -> None:
+    text = "界" * 4_000
+    sources = ({"source_type": "pdf-page", "source_id": "captured-page"},)
+    encoded = entry_content_bytes(kind=" source-evidence ", text=text, source_refs=sources, artifact_refs=())
+    assert text.encode("utf-8") in encoded
+    assert entry_content_hash(kind="source-evidence", text=text, source_refs=sources, artifact_refs=()) == (
+        entry_content_hash(kind=" source-evidence ", text=" " + text, source_refs=sources, artifact_refs=())
+    )
+    for kind, refs in (("note", sources), ("source-evidence", ())):
+        with pytest.raises(ValueError, match="8192 UTF-8 bytes"):
+            entry_content_bytes(kind=kind, text=text, source_refs=refs, artifact_refs=())
+    with pytest.raises(ValueError, match="1048576 UTF-8 bytes"):
+        entry_content_bytes(kind="source-evidence", text="界" * 349_526, source_refs=sources, artifact_refs=())
+
+
 def test_retrieval_query_is_not_held_to_the_entry_body_byte_bound() -> None:
     """The storage byte bound belongs to durable entry bodies, not transient queries."""
 

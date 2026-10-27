@@ -31,13 +31,15 @@ from powercontext.builtin.artifacts.memory.models import MemoryContent
 _ENTRY_HASH_DOMAIN = b"powercontext:entry-content:v1\0"
 _EMBEDDING_HASH_DOMAIN = b"powercontext:embedding-content:v1\0"
 _LOWER_HEX_64 = re.compile(r"[0-9a-f]{64}\Z")
+_ENTRY_TEXT_BYTES = 8_192
+_SOURCE_EVIDENCE_TEXT_BYTES = 1_048_576
 
 
 class _CanonicalValueError(ValueError):
     def __init__(self, code: str, detail: object | None = None) -> None:
         self.code = code
         messages = {
-            "text-too-long": "memory entry text must not exceed 8192 UTF-8 bytes",
+            "text-too-long": f"memory entry text must not exceed {detail or _ENTRY_TEXT_BYTES} UTF-8 bytes",
             "reason-too-long": "memory change reason must not exceed 512 Unicode code points",
             "identifier-empty": "memory identifiers must be non-empty strings",
             "identifier-ascii": "memory identifiers must contain only ASCII characters",
@@ -81,9 +83,26 @@ def canonical_json(value: object) -> bytes:
 def normalize_text(value: str) -> str:
     """Normalize and validate one durable entry body."""
 
+    return _normalize_bounded_text(value, _ENTRY_TEXT_BYTES)
+
+
+def normalize_entry_text(value: str, *, kind: str, source_refs: Sequence[object]) -> str:
+    """Keep complete source evidence within a separate, bounded storage budget.
+
+    A captured page is an indivisible evidence unit, not a generated short note.
+    Use the same rule during writes, hash verification and index reconstruction.
+    """
+
+    maximum = (
+        _SOURCE_EVIDENCE_TEXT_BYTES if normalize_kind(kind) == "source-evidence" and source_refs else _ENTRY_TEXT_BYTES
+    )
+    return _normalize_bounded_text(value, maximum)
+
+
+def _normalize_bounded_text(value: str, maximum: int) -> str:
     normalized = _normalize_non_empty_string(value, "memory entry text")
-    if len(normalized.encode("utf-8")) > 8192:
-        raise _CanonicalValueError("text-too-long")
+    if len(normalized.encode("utf-8")) > maximum:
+        raise _CanonicalValueError("text-too-long", maximum)
     return normalized
 
 
@@ -158,10 +177,12 @@ def entry_content_bytes(
 ) -> bytes:
     """Return canonical content bytes for an immutable entry version."""
 
+    normalized_kind = normalize_kind(kind)
+    normalized_sources = normalize_refs(source_refs)
     return canonical_json({
-        "kind": normalize_kind(kind),
-        "text": normalize_text(text),
-        "source_refs": normalize_refs(source_refs),
+        "kind": normalized_kind,
+        "text": normalize_entry_text(text, kind=normalized_kind, source_refs=normalized_sources),
+        "source_refs": normalized_sources,
         "artifact_refs": normalize_refs(artifact_refs),
     })
 
