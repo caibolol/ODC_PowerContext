@@ -7,9 +7,11 @@ import io
 import json
 import math
 import re
+import unicodedata
 import zlib
 from collections import Counter
 from copy import copy
+from itertools import pairwise
 
 from pydantic import BaseModel, Field, field_validator
 from pypdf import PdfReader, get_configuration
@@ -335,6 +337,87 @@ _CONCEPTS = (
     ),
 )
 
+# General accounting synonyms supplement computed-metric statement discovery.
+_CONCEPTS += (
+    (
+        "\\bcapex\\b|\\bcapital expenditures?\\b|\\bcapital spending\\b|\\bcapital outlays?\\b",
+        "capital expenditures purchases of property plant and equipment additions to property plant and equipment payments for property plant and equipment",
+    ),
+    (
+        "\\bebitda\\b|\\boperating profit\\b|\\boperating income\\b",
+        "operating income operating profit income from operations",
+    ),
+    (
+        "\\bd\\s*&\\s*a\\b|\\bdepreciation and amortization\\b",
+        "depreciation and amortization depreciation amortization",
+    ),
+    ("\\brevenues?\\b|\\bnet sales\\b|\\bsales\\b|\\bturnover\\b", "net revenue net sales total revenues sales"),
+    (
+        "\\bnet income\\b|\\bnet earnings\\b|\\bprofit\\b|\\bbottom line\\b",
+        "net income net earnings net income attributable",
+    ),
+    ("\\bgross (?:profit|margin)\\b", "gross profit gross margin cost of sales"),
+    (
+        "\\bcogs?\\b|\\bcost of goods sold\\b|\\bcost of sales\\b",
+        "cost of goods sold cost of sales cost of products sold",
+    ),
+    (
+        "\\bsg\\s*&\\s*a\\b|\\bselling,? general and administrative\\b",
+        "selling general and administrative selling general and administrative expenses",
+    ),
+    ("\\br\\s*&\\s*d\\b|\\bresearch and development\\b", "research and development research and development expenses"),
+    (
+        "\\bcash flows?\\b|\\bfree cash flow\\b|\\boperating cash flow\\b",
+        "cash flows from operating activities net cash provided by operating activities free cash flow",
+    ),
+    ("\\bbalance sheets?\\b|\\bfinancial position\\b", "balance sheet financial position total assets"),
+    (
+        "\\bincome statements?\\b|\\bprofit and loss\\b|\\bp\\s*&\\s*l\\b",
+        "statements of income statements of earnings income from operations",
+    ),
+    (
+        "\\bassets?\\b|\\bliabilit(?:y|ies)\\b|\\bequity\\b|\\bshareholders'? equity\\b|\\bstockholders'? equity\\b",
+        "total assets total liabilities total equity stockholders equity",
+    ),
+    (
+        "\\bdebt\\b|\\bborrowings?\\b|\\bleverage\\b",
+        "long-term debt short-term debt total debt borrowings notes payable",
+    ),
+    ("\\bdividends?\\b", "dividends cash dividends dividend payments"),
+    ("\\beps\\b|\\bearnings per share\\b", "earnings per share diluted earnings per share basic earnings per share"),
+    ("\\bshares? outstanding\\b|\\bshare count\\b", "shares outstanding weighted average shares outstanding"),
+    (
+        "\\btax(?:es)?\\b|\\beffective tax rate\\b|\\bincome taxes\\b",
+        "income taxes provision for income taxes effective tax rate",
+    ),
+    ("\\binventor(?:y|ies)\\b", "inventories"),
+    ("\\breceivables?\\b|\\baccounts receivable\\b", "accounts receivable receivables"),
+    ("\\bgoodwill\\b|\\bintangible assets?\\b", "goodwill intangible assets"),
+    ("\\brestructuring\\b", "restructuring restructuring charges severance"),
+    (
+        "\\blegal\\b|\\blitigation\\b|\\blawsuits?\\b|\\bproceedings?\\b|\\bcontingenc(?:y|ies)\\b",
+        "legal proceedings legal matters litigation matters contingencies claims",
+    ),
+    (
+        "\\bgeograph(?:y|ies)\\b|\\bregions?\\b|\\bcountries\\b|\\bterritor(?:y|ies)\\b",
+        "geographic regions countries territories international operations reportable segments",
+    ),
+    ("\\bemployees?\\b|\\bheadcount\\b|\\bworkforce\\b", "employees headcount"),
+    ("\\bcompetition\\b|\\bcompetitors?\\b", "competition competitors"),
+    ("\\bacquisitions?\\b|\\bbusiness combinations?\\b", "acquisitions business combinations"),
+    ("\\bpensions?\\b|\\bretirement plans?\\b", "pension retirement plans"),
+    ("\\binterest (?:expense|income)\\b", "interest expense interest income"),
+    ("\\bforeign exchange\\b|\\bcurrency\\b|\\bfx\\b", "foreign exchange currency"),
+    ("\\bsupply chain\\b", "supply chain"),
+    ("\\bbacklog\\b|\\borders\\b", "backlog orders"),
+    ("\\bbuybacks?\\b|\\brepurchases?\\b", "share repurchases repurchases"),
+    ("\\bworking capital\\b", "working capital"),
+    ("\\bdeferred revenue\\b", "deferred revenue"),
+    ("\\bimpairment\\b", "impairment"),
+    ("\\brisk factors?\\b", "risk factors"),
+    ("\\boperating leases?\\b", "operating lease"),
+)
+
 _STATEMENT_HEADINGS = (
     (
         r"\b(?:income|p&l|profit|earnings|revenue|sales|margin|ebitda)\b",
@@ -351,12 +434,78 @@ _STATEMENT_HEADINGS = (
 )
 
 
-def _words(text: str) -> list[str]:
-    return re.findall(r"[a-z]+|\d+", text.lower())
+def _fold(value: str) -> str:
+    text = unicodedata.normalize("NFKC", value).casefold()
+    text = re.sub(r"-\s*\n\s*", "", text)
+    return re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", text)
+
+
+def _normalize_token(token: str) -> str:
+    match = re.fullmatch(r"fy(\d{2,4})", token)
+    if match is None:
+        return token
+    digits = match.group(1)
+    if len(digits) == 4:
+        return digits
+    if len(digits) == 2:
+        return "20" + digits
+    return token
+
+
+def _words(value: str) -> list[str]:
+    return [_normalize_token(token) for token in re.findall(r"[a-z0-9]+", _fold(value))]
+
+
+def _canon(token: str) -> str:  # noqa: C901
+    if token.isdigit():
+        return token
+    current = token
+    if len(current) > 4 and current.endswith("ies"):
+        current = current[:-3] + "y"
+    elif current.endswith("sses") or (len(current) > 4 and current.endswith("es") and current[-3] in "sxz"):
+        current = current[:-2]
+    elif len(current) > 3 and current.endswith("s") and not current.endswith(("ss", "us", "is")):
+        current = current[:-1]
+    if len(current) > 5 and current.endswith("ing"):
+        current = current[:-3]
+    elif len(current) > 4 and current.endswith("ed"):
+        current = current[:-2]
+    if len(current) > 5 and current.endswith("ation"):
+        current = current[:-5] + "at"
+    elif len(current) > 6 and current.endswith("ment"):
+        current = current[:-4]
+    if len(current) > 4 and current.endswith("ly"):
+        current = current[:-2]
+    if len(current) > 4 and current.endswith("e"):
+        current = current[:-1]
+    if len(current) > 4 and current.endswith("y"):
+        current = current[:-1] + "i"
+    return current
+
+
+def _variants(token: str) -> tuple[str, ...]:
+    if token.isdigit():
+        return (token,)
+    forms = [token]
+    if token.endswith("ies") and len(token) > 4:
+        forms.append(token[:-3] + "y")
+    elif token.endswith("y") and len(token) > 3:
+        forms.append(token[:-1] + "ies")
+    if token.endswith("s") and not token.endswith("ss"):
+        forms.append(token[:-1])
+    else:
+        forms.append(token + "s")
+    if token.endswith("ing") and len(token) > 5:
+        forms.extend((token[:-3], token[:-3] + "e"))
+    elif token.endswith("ed") and len(token) > 4:
+        forms.extend((token[:-2], token[:-1]))
+    elif token.endswith("e") and len(token) > 3:
+        forms.extend((token[:-1] + "ing", token + "d"))
+    return tuple(dict.fromkeys(form for form in forms if len(form) > 1))[:5]
 
 
 def _terms(text: str) -> list[str]:
-    return [word[:-1] if len(word) > 4 and word.endswith("s") else word for word in _words(text)]
+    return [_canon(word) for word in _words(text)]
 
 
 def _document_match(document: str, question: str) -> tuple[int, int]:
@@ -385,6 +534,7 @@ async def _pdf_candidates(memory, question: str, raw_terms: list[str], expansion
     # FTS indexes original tokens, not our ranking stems. Keep plural forms and
     # all query terms so long questions do not silently lose their final subject.
     queries = [question, *raw_terms, *dict.fromkeys(_words(expansions))]
+    queries.extend(form for term in raw_terms for form in _variants(term))
     for query in dict.fromkeys(queries):
         result = await memory.search(SearchMemoryRequest(query=query, mode="fts", limit=10000))
         for hit in result.hits:
@@ -406,6 +556,7 @@ async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[Memo
     """Retrieve scoped evidence, then rank within the requested report offline."""
     if type(limit) is not int or limit < 0:
         raise ValueError("limit must be nonnegative")  # noqa: TRY003
+    question = re.sub(r"\bfy(\d{2})\b", r"20\1", _fold(question))
     raw_terms = [word for word in dict.fromkeys(_words(question)) if word not in _FUNCTION_WORDS]
     if not raw_terms or limit == 0:
         return ()
@@ -459,14 +610,20 @@ async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[Memo
     weights = dict.fromkeys(terms, 1.0)
     for term in _terms(expansions):
         weights.setdefault(term, 0.45)
-    counts = [Counter(_terms(hit.text.partition("\n")[2])) for hit in hits]
+    body_terms = [_terms(hit.text.partition("\n")[2]) for hit in hits]
+    query_numbers = {term for term in _words(question) if term.isdigit()}
+    number_matches = [len(query_numbers.intersection(tokens)) for tokens in body_terms]
+    body_terms = [[term for term in tokens if not term.isdigit()] for tokens in body_terms]
+    counts = [Counter(tokens) for tokens in body_terms]
+    phrases = set(pairwise(term for term in _terms(question) if term not in _FUNCTION_WORDS | document_terms))
+    page_phrases = [Counter(pairwise(term for term in tokens if term not in _FUNCTION_WORDS)) for tokens in body_terms]
     average = sum(sum(count.values()) for count in counts) / len(counts) or 1
     frequency = Counter(term for count in counts for term in count)
 
     def score(index: int) -> float:
         count = counts[index]
         length = sum(count.values())
-        return sum(
+        lexical = sum(
             weight
             * math.log(1 + (len(counts) - frequency[term] + 0.5) / (frequency[term] + 0.5))
             * count[term]
@@ -475,6 +632,15 @@ async def search_pdf_pages(memory, question: str, limit: int = 10) -> tuple[Memo
             for term, weight in weights.items()
             if count[term]
         )
+
+        phrase_score = sum(
+            min(page_phrases[index][pair], 2)
+            * sum(math.log(1 + (len(counts) - frequency[term] + 0.5) / (frequency[term] + 0.5)) for term in pair)
+            * 0.55
+            for pair in phrases
+            if page_phrases[index][pair]
+        )
+        return lexical + phrase_score + 0.5 * min(number_matches[index], 2)
 
     citations = []
     pages = set()

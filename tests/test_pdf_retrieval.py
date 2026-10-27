@@ -331,3 +331,51 @@ def test_pdf_revisions_keep_exact_citations_after_restart(tmp_path):
             assert {entry.source_ref.source_id for entry in journal} == set(source_ids)
 
     asyncio.run(run())
+
+
+def test_synonyms_short_fiscal_year_and_phrase_ranking(tmp_path):
+    async def run():
+        registry = SourceDefinitionRegistry((PDF_PAGE_SOURCE_DEFINITION,))
+        pages = [
+            ("ACME_2021_10K", "Legal contingencies lawsuit 2021"),
+            ("ACME_2022_10K", "Pending legal contingencies 2022"),
+            ("ACME_2022_10K", "Diluted earnings per share 4.20"),
+            ("ACME_2022_10K", "Our supply chain disruptions affected shipments"),
+            ("ACME_2022_10K", "Our supply increased; the retail chain grew; disruptions were minor"),
+            ("ACME_2022_10K", "Inventories 123"),
+            ("3M_2022_10K", "Diluted earnings per share 9.99"),
+        ]
+        config = BuiltinConfig(database=SQLiteConfig(url=f"sqlite+aiosqlite:///{tmp_path / 'synonyms.db'}"))
+        async with open_builtin_runtime(config, candidate_pipeline=EvidencePipeline()) as runtime:
+            assert runtime.scopes is not None
+            scope = await runtime.scopes.create(
+                ScopeDraft(title="Synonyms", summary="Reports", idempotency_key="synonyms")
+            )
+            await runtime.ingestion.register(manifest_for_definition(PDF_PAGE_SOURCE_DEFINITION))
+            for number, (document, text) in enumerate(pages, 1):
+                source = await registry.resolve(
+                    PDFPageInput(document_id=document, document_sha256="a" * 64, page_number=number, text=text)
+                )
+                await runtime.ingestion.submit(
+                    SubmitSourceObservation(
+                        scope_id=scope.scope_id, observation=project_source_for_transport(registry, source)
+                    )
+                )
+            memory = runtime.memory.for_scope(scope.scope_id)
+            while (await memory.flush()).processed:
+                pass
+        async with open_builtin_runtime(config) as runtime:
+            memory = runtime.memory.for_scope(scope.scope_id)
+            for question, expected in (
+                ("Acme FY22 lawsuit?", pages[1]),
+                ("Acme FY22 diluted EPS?", pages[2]),
+                ("Acme FY22 supply chain disruptions?", pages[3]),
+                ("Acme FY22 inventory?", pages[5]),
+                ("3M FY22 diluted EPS?", pages[6]),
+            ):
+                citations = await search_pdf_pages(memory, question, limit=1)
+                assert len(citations) == 1
+                entry = (await memory.get(GetMemoryEntryRequest(citation=citations[0]))).entry
+                assert entry.text == "\n".join(expected), question
+
+    asyncio.run(run())
