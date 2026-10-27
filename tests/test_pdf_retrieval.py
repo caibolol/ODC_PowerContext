@@ -1,8 +1,10 @@
 """PDF retrieval regressions through persisted, reopened scoped Memory."""
 
 import asyncio
+import io
 
 import pytest
+from pypdf import PdfWriter
 
 from powercontext.builtin.artifacts.memory import MemoryEntryInput
 from powercontext.builtin.persistence.sqlite import SQLiteConfig
@@ -11,11 +13,18 @@ from powercontext.builtin.runtime import (
     GetMemoryEntryRequest,
     RememberMemoryRequest,
     SubmitSourceObservation,
+    open_builtin_contexts,
     open_builtin_runtime,
 )
 from powercontext.builtin.scope import ScopeDraft
 from powercontext.sources import SourceDefinitionRegistry, manifest_for_definition, project_source_for_transport
-from powercontext.sources.pdf_pages import PDF_PAGE_SOURCE_DEFINITION, PDFPageInput, search_pdf_pages
+from powercontext.sources.pdf_pages import (
+    PDF_PAGE_SOURCE_DEFINITION,
+    PDFDocumentInput,
+    PDFPageInput,
+    parse_pdf_document,
+    search_pdf_pages,
+)
 from powercontext.sources.projections import TEXT_EVIDENCE_PROJECTION_KEY
 
 
@@ -56,6 +65,11 @@ def test_pdf_report_identity_vocabulary_and_plural_recall(tmp_path):
                 for n in range(30)
             ],
             ("GENERIC_REPORT", 1, "Fictional Holdings capital expenditures purchases of property plant equipment 999"),
+            (
+                "3M_2022_10K",
+                1,
+                "CONSOLIDATED STATEMENTS OF CASH FLOWS\nCapital expenditures USD 3 million 999",
+            ),
             *[("OTHER_2022_10K", n + 1, f"Capital expenditure capex cash flow 2022 item {n}") for n in range(30)],
         ]
         config = BuiltinConfig(database=SQLiteConfig(url=f"sqlite+aiosqlite:///{tmp_path / 'pdf.db'}"))
@@ -91,6 +105,11 @@ def test_pdf_report_identity_vocabulary_and_plural_recall(tmp_path):
             assert entry.text.startswith("ACME_2022_10K\n")
             assert "Purchases of property" in entry.text
             citations = await search_pdf_pages(
+                memory, "What are Acme's FY2022 capital expenditures, in USD 3 million?", limit=1
+            )
+            entry = (await memory.get(GetMemoryEntryRequest(citation=citations[0]))).entry
+            assert entry.text.startswith("ACME_2022_10K\n")
+            citations = await search_pdf_pages(
                 memory,
                 "Please find supporting evidence useful to investors evaluating uncertain exposures affecting future performance through difficult economic conditions especially contingencies",
                 limit=1,
@@ -119,3 +138,49 @@ def test_pdf_report_identity_vocabulary_and_plural_recall(tmp_path):
 def test_pdf_page_rejects_blank_document_id(document_id):
     with pytest.raises(ValueError):
         PDFPageInput(document_id=document_id, document_sha256="a" * 64, page_number=1, text="")
+
+
+def test_pdf_revisions_keep_exact_citations_after_restart(tmp_path):
+    async def run():
+        registry = SourceDefinitionRegistry((PDF_PAGE_SOURCE_DEFINITION,))
+        writer = PdfWriter()
+        writer.add_blank_page(width=100, height=200)
+        config = BuiltinConfig(database=SQLiteConfig(url=f"sqlite+aiosqlite:///{tmp_path / 'revisions.db'}"))
+        scope_id, records, source_ids = None, [], []
+        for title in ("Original", "Revised"):
+            writer.add_metadata({"/Title": title})
+            buffer = io.BytesIO()
+            writer.write(buffer)
+            page = parse_pdf_document(PDFDocumentInput(document_id="ACME_2022_10K", content=buffer.getvalue()))[0]
+            source = await registry.resolve(page)
+            source_ids.append(source.name)
+            observation = project_source_for_transport(registry, source)
+            async with open_builtin_runtime(config, candidate_pipeline=EvidencePipeline()) as runtime:
+                assert runtime.scopes is not None
+                if scope_id is None:
+                    scope = await runtime.scopes.create(
+                        ScopeDraft(title="Revisions", summary="PDF revisions", idempotency_key="revisions")
+                    )
+                    scope_id = scope.scope_id
+                await runtime.ingestion.register(manifest_for_definition(PDF_PAGE_SOURCE_DEFINITION))
+                for _ in range(2):
+                    await runtime.ingestion.submit(SubmitSourceObservation(scope_id=scope_id, observation=observation))
+                memory = runtime.memory.for_scope(scope_id)
+                while (await memory.flush()).processed:
+                    pass
+                entries = (await memory.list()).entries
+                assert len(entries) == len(records) + 1
+                record = next(record for record in entries if record.entry.sources[0].source_id == source.name)
+                records.append(record)
+        assert scope_id is not None and source_ids[0] != source_ids[1]
+        async with open_builtin_runtime(config) as runtime:
+            memory = runtime.memory.for_scope(scope_id)
+            for record, source_id in zip(records, source_ids, strict=True):
+                restored = await memory.get(GetMemoryEntryRequest(citation=record.citation))
+                assert restored == record and restored.entry.sources[0].source_id == source_id
+        async with open_builtin_contexts(config) as contexts:
+            journal = await (await contexts.get(scope_id)).sources.journal.entries()
+            assert len(journal) == 2
+            assert {entry.source_ref.source_id for entry in journal} == set(source_ids)
+
+    asyncio.run(run())

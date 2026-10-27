@@ -7,10 +7,12 @@ import io
 import json
 import math
 import re
+import zlib
 from collections import Counter
 
 from pydantic import BaseModel, Field, field_validator
-from pypdf import PdfReader
+from pypdf import PdfReader, get_configuration
+from pypdf.generic import ArrayObject, EncodedStreamObject, NameObject
 
 from powercontext.builtin.artifacts.memory.models import MemoryCitation
 from powercontext.builtin.runtime.models import GetMemoryEntryRequest, SearchMemoryRequest
@@ -45,16 +47,44 @@ class PDFPageInput(BaseModel):
         return value
 
 
+def _validate_compressed_streams(reader: PdfReader) -> None:
+    # pypdf can silently return partial text from truncated Flate streams.
+    for stream in tuple(reader.resolved_objects.values()):
+        if not isinstance(stream, EncodedStreamObject):
+            continue
+        filters = stream["/Filter"]
+        if not isinstance(filters, ArrayObject):
+            filters = ArrayObject([filters])
+        for index, name in enumerate(filters):
+            if name not in ("/FlateDecode", "/Fl"):
+                continue
+            data = stream._data
+            if index:
+                prefix = EncodedStreamObject()
+                prefix.update(stream)
+                prefix._data = data
+                prefix[NameObject("/Filter")] = ArrayObject(filters[:index])
+                data = prefix.get_data()
+            decoder = zlib.decompressobj()
+            decoder.decompress(data, max_length=get_configuration().zlib_maximum_output_length)
+            if not decoder.eof:
+                raise ValueError("Incomplete compressed PDF stream")  # noqa: TRY003
+
+
 def parse_pdf_document(value: PDFDocumentInput) -> tuple[PDFPageInput, ...]:
     """Extract every physical page, returning nothing until extraction succeeds."""
-    if not value.document_id.strip() or not value.content.startswith(b"%PDF-"):
+    if (
+        not value.document_id.strip()
+        or not value.content.startswith(b"%PDF-")
+        or not value.content.rstrip().endswith(b"%%EOF")
+    ):
         raise ValueError("Expected a named complete PDF document")  # noqa: TRY003
     digest = hashlib.sha256(value.content).hexdigest()
     try:
-        reader = PdfReader(io.BytesIO(value.content))
+        reader = PdfReader(io.BytesIO(value.content), strict=True)
         if reader.is_encrypted and not reader.decrypt(""):
             raise ValueError("PDF requires a user password")  # noqa: TRY003, TRY301
-        return tuple(
+        pages = tuple(
             PDFPageInput(
                 document_id=value.document_id,
                 document_sha256=digest,
@@ -63,8 +93,10 @@ def parse_pdf_document(value: PDFDocumentInput) -> tuple[PDFPageInput, ...]:
             )
             for number, page in enumerate(reader.pages, 1)
         )
+        _validate_compressed_streams(reader)
     except Exception as error:
         raise ValueError("Unable to extract the complete PDF") from error  # noqa: TRY003
+    return pages
 
 
 class PDFPageSource(Source):
@@ -233,8 +265,8 @@ def _document_match(document: str, question: str) -> tuple[int, int]:
     company = re.split(r"(?:19|20)\d{2}", document.lower(), maxsplit=1)[0]
     company_words = [word for word in _words(company) if word not in {"inc", "corp", "corporation", "the"}]
     compact_company = "".join(company_words)
-    compact_question = "".join(_words(question))
-    named = bool(compact_company and compact_company in compact_question)
+    company_pattern = r"\b" + r"\s*".join(re.escape(character) for character in compact_company) + r"\b"
+    named = bool(compact_company and re.search(company_pattern, " ".join(_words(question))))
     years = set(re.findall(r"(?:19|20)\d{2}", document))
     requested = set(re.findall(r"(?:19|20)\d{2}", question))
     return int(named), int(bool(years & requested))
