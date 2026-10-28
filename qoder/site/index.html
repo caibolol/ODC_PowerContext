@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>研读档案 EvidenceDesk · OceanBase 数据库大赛 Qoder 赛道</title>
-  <meta name="description" content="EvidenceDesk：帮助学生与研究者管理资料摘录，用真实 seekdb FULLTEXT IK 检索带来源的证据，并保存复习进度。81/81 集成测试通过。">
+  <meta name="description" content="EvidenceDesk：帮助学生与研究者管理资料摘录，用真实 seekdb FULLTEXT IK 检索带来源的证据，并保存复习进度。84/84 集成测试通过，站点内置可运行的在线体验。">
   <meta name="theme-color" content="#0b1220">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <style>
@@ -986,6 +986,7 @@
       <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="navLinks">菜单</button>
       <nav class="nav-links" id="navLinks" aria-label="主导航">
         <a href="#about">项目</a>
+        <a href="demo.html">在线体验</a>
         <a href="#features">功能</a>
         <a href="#architecture">架构</a>
         <a href="#demo">真实截图</a>
@@ -1007,8 +1008,9 @@
             并保存复习进度。检索由真实数据库完成，不以页面字符串匹配冒充全文检索。
           </p>
           <div class="hero-actions">
-            <a class="btn btn-primary" href="#demo">查看真实运行截图</a>
-            <a class="btn btn-ghost" href="#verify">查看 81/81 测试结果</a>
+            <a class="btn btn-primary" href="demo.html">在线体验主要功能（无需部署）</a>
+            <a class="btn btn-ghost" href="#demo">查看真实运行截图</a>
+            <a class="btn btn-ghost" href="#verify">查看 84/84 测试结果</a>
             <a class="btn btn-ghost" href="https://github.com/caibolol/ODC_PowerContext/tree/2026-competition-ecosystem/qoder" target="_blank" rel="noopener noreferrer">查看源码仓库</a>
           </div>
           <div class="hero-pills" aria-label="技术栈">
@@ -1052,7 +1054,7 @@
         <div><strong>10</strong><span>条合成教学样例</span></div>
         <div><strong>2</strong><span>张 odc_qoder_ 数据表</span></div>
         <div><strong>2</strong><span>个 FULLTEXT IK 索引</span></div>
-        <div><strong>81/81</strong><span>项集成测试通过</span></div>
+        <div><strong>84/84</strong><span>项集成测试通过</span></div>
       </div>
     </div>
     <div class="spacer-34" aria-hidden="true"></div>
@@ -1208,7 +1210,7 @@
             应用运行在 http://127.0.0.1:18748，连接本机 seekdb。截图中的样例条目都带有“合成样例·占位来源”标记。
           </p>
         </div>
-        <div class="demo-note">公开站点为静态介绍页；以下为本地真实运行截图与测试记录</div>
+        <div class="demo-note">公开站点内置可运行的在线体验：<a href="demo.html"><b>demo.html —— 检索、录入、复习状态、Markdown 导出均可直接在页面完成</b></a>（演示模式，数据保存在浏览器本地）。以下为连接本机 seekdb 的真实运行截图与测试记录</div>
         <div class="shot-grid">
           <figure class="shot reveal">
             <button type="button" data-lightbox="assets/evidence-list.png" aria-label="放大查看资料列表截图">
@@ -1247,7 +1249,7 @@
             <span class="q">HttpApiKeyword</span>
             <strong>HTTP 新增后立即可检索</strong>
             <p>集成测试通过真实 HTTP 接口保存记录，再调用 /api/search 命中同一条 ID。</p>
-            <span class="score">81/81 测试覆盖</span>
+            <span class="score">84/84 测试覆盖</span>
           </article>
         </div>
       </div>
@@ -1259,6 +1261,7 @@
           <p class="kicker">05 · 运行与复现</p>
           <h2>四条命令启动，六个步骤体验完整流程。</h2>
           <p class="section-lead">默认连接 127.0.0.1:2881 的 test 数据库，root 用户、空密码；连接参数均可通过环境变量覆盖。</p>
+          <div class="demo-note">更快复现：Linux/macOS 在 qoder 目录执行 <span class="mono">bash scripts/bootstrap.sh</span>，一条命令完成「安装并启动 seekdb → 建表与 IK 索引 → 导入样例 → 启动服务」；Windows 执行 <span class="mono">powershell scripts/bootstrap.ps1 -SeekdbExe &lt;seekdb.exe 路径&gt;</span>。免部署体验请直接打开 <a href="demo.html"><b>在线体验</b></a>。</div>
         </div>
         <div class="start-grid">
           <div class="panel reveal">
@@ -1268,7 +1271,7 @@
               <li><div><strong>初始化表与索引</strong><span>执行 npm run db:init，创建 odc_qoder_ 前缀表与 IK FULLTEXT 索引。</span></div></li>
               <li><div><strong>启动应用</strong><span>执行 npm start，默认只监听 127.0.0.1:18748。</span></div></li>
               <li><div><strong>体验功能</strong><span>导入合成样例，搜索“分布式数据库”，设置复习状态，导出 Markdown。</span></div></li>
-              <li><div><strong>运行测试</strong><span>执行 npm test，得到 81 项真实 seekdb 集成测试结果。</span></div></li>
+              <li><div><strong>运行测试</strong><span>执行 npm test，得到 84 项真实 seekdb 集成测试结果。</span></div></li>
             </ol>
           </div>
           <div class="code-card reveal">
@@ -1330,7 +1333,7 @@
       <div class="shell">
         <div class="section-head reveal">
           <p class="kicker">06 · 验证结果</p>
-          <h2>81 项集成测试，全部通过。</h2>
+          <h2>84 项集成测试，全部通过。</h2>
           <p class="section-lead">
             测试直接连接真实 seekdb，不使用 mock 数据库。覆盖新增、检索命中、状态持久化、注入安全与 HTTP 输入校验。
           </p>
@@ -1338,8 +1341,8 @@
         <div class="verify-wrap">
           <div class="score-card reveal">
             <span class="label">npm test · integration</span>
-            <div class="big">81<small>/81</small></div>
-            <p>2026-10-27 在本机真实 seekdb 环境执行，0 失败。测试结束后只删除本次创建的 ID，测试前的已有记录保持不变（本次为 11 条）。</p>
+            <div class="big">84<small>/84</small></div>
+            <p>2026-10-27 在本机真实 seekdb 环境执行，0 失败；同日复核追加 3 项相关度一致性回归后共 84 项通过（见 evidence/review-verification-20261027.txt），原始 81 项日志保留在 evidence/verification-tests-20261027.txt。测试结束后只删除本次创建的 ID，测试前的已有记录保持不变（本次为 11 条）。</p>
             <div class="env-table">
               <div><span>Node.js</span><strong>v24.19.0</strong></div>
               <div><span>seekdb</span><strong>5.7.25-OceanBase seekdb-v1.4.0.0</strong></div>

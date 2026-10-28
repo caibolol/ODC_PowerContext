@@ -2,7 +2,9 @@
 
 OceanBase 数据库大赛 Qoder 赛道作品 - 帮助学生和研究者管理资料摘录、检索带来源的证据、保存复习进度的 Web 应用。
 
-作品介绍页（Qoder Sites，公开）：https://evidence-desk-cjpm9j6u4we.qoder.zone
+作品介绍页（Qoder Sites，公开）：https://evidence-desk-quxa3c018p9.qoder.zone
+
+在线体验（免部署，主要功能直接在浏览器运行）：https://evidence-desk-quxa3c018p9.qoder.zone/demo.html
 
 Qoder 账号、开发过程和验收材料见 [开发与验收记录](DEVELOPMENT.md)。
 
@@ -62,7 +64,25 @@ EvidenceDesk 是一个基于 Node.js + Express + OceanBase(seekdb) 的研读档�
 - Node.js >= 18.0.0
 - seekdb 服务端（本项目在 `5.7.25-OceanBase seekdb-v1.4.0.0` 验证，MySQL 协议端口默认为 `2881`）。需提供 IK 全文解析器；普通 MySQL 不能替代指定的 seekdb。
 
-### 先启动 seekdb
+### 一条命令引导（推荐）
+
+```bash
+# Linux / macOS：在 qoder 目录执行，自动完成 依赖安装 → seekdb 安装与启动 → 建库建表与 IK 索引 → 导入样例 → 启动服务
+bash scripts/bootstrap.sh
+```
+
+```powershell
+# Windows：-SeekdbExe 为 seekdb.exe 的完整路径（必填）
+powershell -ExecutionPolicy Bypass -File scripts\bootstrap.ps1 -SeekdbExe 'C:\seekdb\seekdb.exe'
+```
+
+引导脚本行为：端口上已有可用 seekdb 时直接复用；否则 Linux 下优先在有无 root 权限时选择官方安装脚本或从官方 release 包（v1.4.0）无 root 解包安装，随后以验证过的参数启动（`--nodaemon --base-dir ... --parameter cpu_count=4 --parameter memory_budget=2G --parameter datafile_size=32M --parameter datafile_maxsize=2G --parameter log_disk_size=2G`）；`scripts/wait-ready.js` 轮询就绪并创建数据库，`npm run db:init` 建表与 IK 索引，`scripts/import-sample.js` 幂等导入 10 条合成样例，最后前台启动服务（http://127.0.0.1:18748）。改端口用环境变量 `SEEKDB_PORT`（Linux）或 `-Port`（Windows）。
+
+免部署体验主要功能：直接打开作品介绍页的 [在线体验](https://evidence-desk-quxa3c018p9.qoder.zone/demo.html)（演示模式，数据保存在浏览器本地；真实检索能力以本地 seekdb 部署为准）。
+
+### 手动步骤：先启动 seekdb
+
+已执行上一条命令引导的可跳过本节与「安装步骤」。
 
 应用使用 MySQL 协议连接独立的 seekdb 服务端，Python 嵌入式客户端不能直接代替该端口。Linux/macOS 安装入口见 [seekdb 官方部署说明](https://github.com/oceanbase/seekdb/blob/master/README_CN.md#快速开始)。安装后按其部署说明启动服务，并创建用于本项目的数据库。
 
@@ -227,6 +247,17 @@ npm test
 8. **测试响应式**
    调整浏览器窗口大小，验证移动端适配
 
+### 在线体验验证样例（免部署）
+
+1. **打开在线体验**：浏览器（无痕窗口亦可）访问 https://evidence-desk-quxa3c018p9.qoder.zone/demo.html
+2. **导入样例**：点击「导入 10 条合成教学样例」，状态栏显示资料总数 10，各状态均为未读
+3. **中文检索**：输入「分布式数据库」检索，预期命中「OceanBase 分布式数据库架构设计」等记录并显示相关度评分
+4. **中英混合检索**：输入「Paxos」检索，预期命中「Paxos 共识算法原理与实践」与包含 Paxos 的分布式数据库样例
+5. **复习状态**：在「资料与复习状态」页将任一条设为「待复习」并填写备注保存，刷新页面后状态与备注仍在（浏览器本地持久化）
+6. **导出**：点击「导出 Markdown 证据清单」，下载内容与本地部署 `/api/export` 格式一致，含合成样例数据性质说明
+
+预期结果如上；演示模式数据仅存于浏览器 localStorage，不连接数据库。seekdb 实际发挥作用的记录见「集成测试」与 evidence/ 目录测试日志。
+
 ## 安全特性
 
 - **SQL 注入防护**：所有查询使用参数绑定（mysql2 prepared statements）
@@ -246,7 +277,15 @@ qoder/
 ├── public/
 │   └── index.html         # 前端单页应用
 ├── scripts/
-│   └── init-db.js         # 数据库初始化与 IK/BENG 索引迁移
+│   ├── init-db.js         # 数据库初始化与 IK/BENG 索引迁移
+│   ├── wait-ready.js      # 轮询 seekdb 就绪并创建数据库
+│   ├── import-sample.js   # 幂等导入合成教学样例
+│   ├── bootstrap.sh       # Linux/macOS 一条命令引导
+│   └── bootstrap.ps1      # Windows 一条命令引导
+├── site/
+│   ├── index.html         # Qoder Sites 作品介绍页
+│   ├── demo.html          # Qoder Sites 在线体验页（演示模式）
+│   └── assets/            # 介绍页截图与图标
 ├── test/
 │   └── integration.test.js # 集成测试
 ├── package.json
