@@ -1,7 +1,4 @@
-node_modules/
-.env
-*.log
-.DS_Store
-coverage/
-dist/
-*.qoder.site
+__pycache__/
+*.pyc
+.venv/
+.pagetrail/
