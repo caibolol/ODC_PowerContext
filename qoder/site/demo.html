@@ -467,6 +467,7 @@
   $('tab-create').addEventListener('click', function () { switchTab('create'); });
 
   $('btnImport').addEventListener('click', function () {
+    try { localStorage.removeItem('evidencedesk_demo_cleared'); } catch (e) { /* 忽略 */ }
     var added = importSample();
     renderStatus();
     renderResults(search(lastQuery, { tag: $('fTag').value || null, state: $('fState').value || null }), lastQuery);
@@ -475,6 +476,7 @@
 
   $('btnReset').addEventListener('click', function () {
     store = { seq: 1, excerpts: [], reviews: {} };
+    try { localStorage.setItem('evidencedesk_demo_cleared', '1'); } catch (e) { /* 忽略 */ }
     saveStore();
     renderStatus();
     renderResults([], '');
@@ -538,8 +540,21 @@
     buildMarkdown: buildMarkdown, reset: function () { store = { seq: 1, excerpts: [], reviews: {} }; saveStore(); renderStatus(); }
   };
 
+  var autoSeeded = false;
+  if (store.excerpts.length === 0) {
+    var clearedFlag = false;
+    try { clearedFlag = localStorage.getItem('evidencedesk_demo_cleared') === '1'; } catch (e) { /* 忽略 */ }
+    if (!clearedFlag) {
+      importSample();
+      autoSeeded = true;
+    }
+  }
+
   renderStatus();
   renderResults(search('', {}), '');
+  if (autoSeeded) {
+    $('searchMsg').innerHTML = '<div class="okmsg">已预载 10 条合成教学样例（演示数据，仅存于本浏览器），可直接检索；也可清空或重新导入。</div>';
+  }
 })();
 </script>
 </body>
