@@ -1,31 +1,21 @@
-# 官方验收项与提交材料
+# 验收项与证据
 
-题面：[MiniMax × OceanBase：规有所依](https://oceanbase.yuque.com/org-wiki-obtech-vh7w9r/hc3pio/qlqnoryzrs7gtqbw)。全部资产位于 `minimax/`，开发分支 `2026-competition-ecosystem` 继承官方同名分支（共同基点 `d647275c308e09b7b623f322a26f5c4e85734fb0`）。
+题面：[MiniMax × OceanBase：规有所依](https://oceanbase.yuque.com/org-wiki-obtech-vh7w9r/hc3pio/qlqnoryzrs7gtqbw)。全部资产位于 `minimax/`。
 
-| 必做项 | 复现入口与证据 |
-| --- | --- |
-| 能够运行 | README.md 的安装、启动、两条验证命令；2026-10-28 使用新建虚拟环境、独立源码副本、空 seekdb 数据目录和空 PowerContext 数据目录复现成功，见 evidence/clean-environment/ |
-| MiniMax 实际参与 | DEVELOPMENT.md、evidence/minimax-request.txt、evidence/minimax-response.py；最终 sample/after/task_service.py 与原始回复逐字节相同 |
-| 上下文正确 | sample/manifest.json、sample/spec.md、sample/before/task_service.py、sample/test_task_service.py；verify_context.py 验证三类来源及更新规格后输出新内容 |
-| 数据库实际参与 | context.py 的真实 seekdb 导入和参数绑定查询；evidence/clean-environment/integration.json 记录全部独立进程命令、退出码、来源、查询文本、参数和返回行数 |
-| 状态能够复用 | 初始空 scope、PowerContext 写入、再启动 CLI 后恢复状态并进入 previous_state；context-initial.json、state-write.json、context-restored.json |
-| 代码修改有效 | evidence/clean-environment/tests.json；同一7项测试，修改前5个断言失败，修改后全部通过；前后测试文件SHA-256一致，均记录代码SHA-256与命令退出码 |
+| 必做项 | 如何复现 | 证据 |
+| --- | --- | --- |
+| 能够运行 | README.md「Linux」一节：安装依赖、启动 seekdb 官方镜像与 PowerContext（空数据目录），执行 `python run_demo.py --recorded` | `evidence/run/steps.json`、`summary.json`（每步命令、退出码、输出、git 版本） |
+| MiniMax 实际参与 | DEVELOPMENT.md；`python run_demo.py`（配置 MINIMAX_API_KEY）实时复现 | `evidence/minimax-api/*-exchange.json`（上下文、每轮请求与回复、测试结果）、`*-change.diff`；`sample/after/task_service.py` 与记录中的输出逐字节相同 |
+| 上下文正确 | `python context.py context ...`；`run_demo.py` 最后一步追加规格并重新导入 | `evidence/run/context-initial.json`、`context-updated.json`：含 `spec.md#TASK-2`/`#TASK-1`、`before/task_service.py#list_tasks`、`FeatureTests` 5 个与 `RegressionTests` 2 个用例；更新后 implement 条目包含新增文字 |
+| 数据库实际参与 | context.py 写入并查询 seekdb 的 `sdd_sources`、`sdd_entries` | 每份 context 输出的 `query.all_queries`（SQL、参数、返回行数） |
+| 状态能够复用 | `run_demo.py`：新 scope 为空 → 保存进展 → 新进程读回 → MiniMax 修改 → 保存验证结果 → 新进程读回 | `context-initial.json`（`progress` 为空）、`context-restored.json`（已完成、待办为空、两条验证结果） |
+| 代码修改有效 | `run_demo.py` 修改前后各运行同一组测试 | `steps.json`：`tests-before-target` 退出 1（5 个断言失败，非环境错误），`tests-before-regression` 退出 0，`tests-after-target`、`tests-after-regression` 退出 0；测试文件 SHA-256 前后相同 |
 
 ## 材料索引
 
-- 完整源码：context.py、sample/、verify_sample.py、verify_context.py、启动脚本。
-- 运行说明：README.md；依赖版本：requirements.txt、requirements-windows-lock.txt。
-- 验证样例：sample/spec.md、sample/manifest.json、业务前后快照及同一测试文件；输入输出和重置方式见 README.md。
-- 代码差异：evidence/final-change.diff；本地先行实现和差异另行保留。
-- 技术使用记录：DEVELOPMENT.md 与 evidence/，包括 MiniMax 原始请求和代码、数据库查询、PowerContext 状态写入与复用。
-- 一页技术说明：README.md 对应章节。
-
-## 干净环境复现记录
-
-2026-10-28（Asia/Shanghai），新建 Python 3.12 虚拟环境；从固定 Git 提交安装 PowerContext，而非引用原有 editable 安装；安装 PyMySQL 1.2.0。完整安装结果已冻结为 requirements-windows-lock.txt（Windows/Python 3.12）。使用独立项目副本执行验证，数据库与 PowerContext 均使用全新持久化目录，不复用此前任务数据。
-
-PowerContext 本次实际安装版本：`0.1.dev805+gda0cb9c2e`，固定源码提交 `da0cb9c2e945d6363725b3abfc4f40a854bf9d29`。seekdb 使用原生 1.4.0.0，源码 `bef66ef2f6dc7b6c046a9af9daafa9b811a9c401`。服务分别绑定回环 18754、18755，验证进程经 PC_URL、DB_PORT 配置；README 默认端口为18752、18753，行为一致。
-
-执行 `python verify_sample.py`：验证脚本退出0；业务修改前测试退出1，修改后退出0。执行 `python verify_context.py`：退出0，完成真实资料导入/查询、规格更新、空状态写入及跨进程复用。证据保留原始执行路径以便审计；这些路径不是复现时的硬编码依赖。
-
-平台分数以实际评审结果为准。
+- 完整源码：`context.py`、`minimax_agent.py`、`run_demo.py`、`sample/`、启动脚本；原有 `verify_sample.py`、`verify_context.py`。
+- 运行说明：README.md；依赖：`requirements.txt`（Windows 完整锁定 `requirements-windows-lock.txt`）。
+- 验证样例：README.md「验证样例」；`sample/spec.md`、`sample/manifest.json`、`sample/before/`、`sample/after/`、`sample/test_task_service.py`。
+- 代码与测试：修改前后快照 `sample/before/`、`sample/after/`；差异 `evidence/minimax-api/*-change.diff`；测试日志 `evidence/run/steps.json`。
+- 技术使用记录：DEVELOPMENT.md（MiniMax）、context 输出中的 `query`（数据库查询）、`steps.json` 中的 `save-*` 与 `context-*` 步骤（PowerContext 写入与复用）。
+- 一页技术说明：TECHNICAL.md。

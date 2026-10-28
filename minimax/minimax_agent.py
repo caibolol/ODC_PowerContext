@@ -79,6 +79,22 @@ def call_minimax(messages, model, base_url, key):
     return body, reply, round(time.time() - started, 2)
 
 
+def run_tests(ctx, output):
+    """用上下文中的测试文件（seekdb 中的内容）运行功能与回归测试。"""
+    names = ctx['tests']['functional'] + ctx['tests']['regression']
+    paths = sorted({name.split('#')[0] for name in names})
+    with tempfile.TemporaryDirectory() as temporary:
+        for path in paths:
+            content = next(row['content'] for row in ctx['sources'] if row['path'] == path)
+            (Path(temporary) / Path(path).name).write_text(content, encoding='utf-8')
+        ids = [Path(name.split('#')[0]).stem + '.' + name.split('#')[1] for name in names]
+        command = [sys.executable, '-B', '-m', 'unittest', '-v', *ids]
+        env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(Path(output).resolve().parent), temporary]))
+        run = subprocess.run(command, cwd=temporary, env=env, capture_output=True, text=True)
+    return {'command': ['python', '-B', '-m', 'unittest', '-v', *ids], 'exit_code': run.returncode,
+            'output': run.stdout + run.stderr}
+
+
 def extract_code(content):
     content = re.sub(r'<think>.*?</think>', '', content, flags=re.S)
     blocks = CODE_BLOCK.findall(content)
@@ -89,10 +105,13 @@ def extract_code(content):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--project', required=True)
-    parser.add_argument('--task', required=True)
-    parser.add_argument('--scope', required=True)
+    parser.add_argument('--project')
+    parser.add_argument('--task')
+    parser.add_argument('--scope')
+    parser.add_argument('--context-file', help='使用已保存的 context.py 输出（例如 CI 中真实服务给出的上下文），'
+                        '不再连接数据库；此时不写回 PowerContext')
     parser.add_argument('--output', required=True, help='写入 MiniMax 修改后文件的路径')
+    parser.add_argument('--max-rounds', type=int, default=3, help='测试失败时把输出交回 MiniMax 的最多轮数')
     args = parser.parse_args()
     key = os.environ.get('MINIMAX_API_KEY')
     if not key:
@@ -100,38 +119,66 @@ def main():
     model = os.getenv('MINIMAX_MODEL', 'MiniMax-M3')
     base_url = os.getenv('MINIMAX_BASE_URL', 'https://api.minimaxi.com/v1')
 
-    context_command, ctx = run_context(args)
+    if args.context_file:
+        ctx = json.loads(Path(args.context_file).read_text(encoding='utf-8'))
+        context_command = ['(file)', 'context-file', str(args.context_file),
+                           'sha256=' + hashlib.sha256(Path(args.context_file).read_bytes()).hexdigest()]
+        args.task = args.task or ctx['task']
+    elif not (args.project and args.task and args.scope):
+        raise SystemExit('需要 --project --task --scope，或 --context-file')
+    else:
+        context_command, ctx = run_context(args)
     if len(ctx['code_targets']) != 1:
         raise SystemExit('本样例要求恰好一个待修改的代码文件')
     target = ctx['code_targets'][0]
     before = next(row['content'] for row in ctx['sources'] if row['path'] == target['path'])
-    messages = [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': build_prompt(ctx)}]
-    request, reply, seconds = call_minimax(messages, model, base_url, key)
-    after = extract_code(reply['choices'][0]['message']['content'])
-
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(after, encoding='utf-8')
-    diff = ''.join(difflib.unified_diff(before.splitlines(True), after.splitlines(True),
-                                        f"a/{target['path']}", f'b/{output.as_posix()}'))
-
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     EVIDENCE.mkdir(parents=True, exist_ok=True)
+    messages = [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': build_prompt(ctx)}]
+    rounds, after, seconds, reply = [], before, 0.0, {}
+    for number in range(1, args.max_rounds + 1):
+        request, reply, elapsed = call_minimax(messages, model, base_url, key)
+        seconds += elapsed
+        content = reply['choices'][0]['message']['content']
+        after = extract_code(content)
+        # 按 MiniMax 原样字节写入（不做换行转换），与记录中的 SHA-256 一致
+        output.write_text(after, encoding='utf-8', newline='\n')
+        # 开发助手的自检：运行上下文给出的功能与回归测试
+        test_run = run_tests(ctx, output)
+        rounds.append({'round': number, 'elapsed_seconds': elapsed, 'request': request, 'response': reply,
+                       'code_sha256': hashlib.sha256(after.encode()).hexdigest(), 'tests': test_run})
+        print(f'round {number}: tests exit {test_run["exit_code"]}', file=sys.stderr, flush=True)
+        if test_run['exit_code'] == 0:
+            break
+        # 测试失败时把失败输出交给 MiniMax 继续修改
+        messages = messages + [{'role': 'assistant', 'content': content},
+                               {'role': 'user', 'content': '运行上下文中的测试未全部通过，输出如下。请依据规格条目修正，'
+                                '不要修改测试，再返回完整代码文件。\n```\n' + test_run['output'][-4000:] + '\n```'}]
+    diff = ''.join(difflib.unified_diff(before.splitlines(True), after.splitlines(True),
+                                        f"a/{target['path']}", f'b/{output.as_posix()}'))
     record = {
         'time_utc': stamp, 'endpoint': base_url.rstrip('/') + '/chat/completions', 'model': model,
-        'elapsed_seconds': seconds, 'context_command': context_command[1:],
+        'elapsed_seconds': round(seconds, 2), 'context_command': context_command[1:],
         'context_sources': {'spec_entries': [e['source'] for e in ctx['spec_entries']],
                             'code_targets': [t['source'] for t in ctx['code_targets']],
                             'tests': ctx['tests'], 'seekdb_queries': ctx['query']['all_queries']},
-        'request': request,      # 不含 Authorization 头
-        'response': reply,
+        'rounds': rounds,        # 每轮完整请求（不含 Authorization 头）、原始回复与测试结果
         'output_file': output.as_posix(),
         'before_sha256': hashlib.sha256(before.encode()).hexdigest(),
         'after_sha256': hashlib.sha256(after.encode()).hexdigest(),
     }
     (EVIDENCE / f'{stamp}-exchange.json').write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
-    (EVIDENCE / f'{stamp}-change.diff').write_text(diff, encoding='utf-8')
+    (EVIDENCE / f'{stamp}-change.diff').write_text(diff, encoding='utf-8', newline='\n')
+    if rounds[-1]['tests']['exit_code'] != 0:
+        raise SystemExit(f'MiniMax 在 {len(rounds)} 轮内未使测试通过，记录见 evidence/minimax-api/{stamp}-exchange.json')
 
+    if args.context_file:
+        print(json.dumps({'model': model, 'elapsed_seconds': seconds, 'output': output.as_posix(),
+                          'exchange': f'evidence/minimax-api/{stamp}-exchange.json',
+                          'usage': reply.get('usage')}, ensure_ascii=False, indent=2))
+        return
     # 任务进展写回 PowerContext：下一次 context 会看到“已修改、待测试”
     state = {'task': args.task,
              'completed': ctx['progress']['completed'] + [f'MiniMax（{model}）已依据上下文修改 {target["symbol"]}'],

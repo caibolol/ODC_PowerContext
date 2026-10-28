@@ -1,19 +1,17 @@
-# 开发记录（2026-10-28）
+# 开发记录
 
-本地项目先独立实现，再将完整代码的自然语言描述和任务要求交给 MiniMax 生成最终业务函数。上下文模块、数据库导入和检索、PowerContext 状态保存与复用、业务测试均在正式请求之前完成并验证。
+## 本次代码修改：MiniMax API（2026-10-28，采用）
 
-MiniMax 接入方式：官方网页 `https://agent.minimax.cn/`，页面显示账号 Go、M3.1-Flash。会话为 `https://agent.minimax.cn/mavis?id=457080922194258`。
+最终业务代码 `sample/after/task_service.py` 与 MiniMax 第 2 轮回复中的代码块逐字节相同（SHA-256 `8b9c31f7af6e8d3b0bfb634f9d1ae9ad9c6c7189d4b02e69ed9693f6ca6fe4f0`）。
 
-此前有一次探路请求（在用户明确要求先完成本地整套任务之前发出）。它在网页工作区重建文件并扩展了状态清洗规则，其产物未作为本地实现依据。正式请求明确拒绝这些扩展行为，严格遵循本地已验收规格；保留此前会话以体现真实过程。
+- 接入方式：HTTP，OpenAI 兼容 Chat Completions，`https://api.minimaxi.com/v1/chat/completions`，模型 `MiniMax-M3`，temperature 0.2；入口 `minimax_agent.py`。
+- 提供的上下文：`evidence/minimax-api/ci-context-before-change.json`，即 `run_demo.py` 在干净 Linux 环境（GitHub Actions，seekdb 官方镜像 + PowerContext）中 `context-before-change` 步骤的真实输出：规格条目 `spec.md#TASK-2`（implement）与 `spec.md#TASK-1`（preserve），代码符号 `before/task_service.py#list_tasks`，功能测试 5 个、回归测试 2 个，以及从 PowerContext 读回的进展（已完成：导入资料；待办：由 MiniMax 修改代码、运行测试）。提示中没有任何参考实现。
+- 过程（`evidence/minimax-api/20261028T010349Z-exchange.json`，含每轮完整请求、原始回复、代码哈希与测试输出）：
+  - 第 1 轮（21.9 秒，1393 tokens）：实现了筛选，但把记录中的 status 也做了 strip，`FeatureTests.test_done` 失败（规格只要求记录 status 做 casefold）。
+  - 第 2 轮（4.9 秒，2010 tokens）：助手把失败输出交回 MiniMax，MiniMax 去掉对记录 status 的 strip，7 个测试全部通过。
+- 代码差异：`evidence/minimax-api/20261028T010349Z-change.diff`（`before/task_service.py` → MiniMax 输出）。
+- 运行方式：本地 Windows 以 `python minimax_agent.py --context-file evidence/minimax-api/ci-context-before-change.json --output sample/after/task_service.py` 调用（API Key 由环境变量提供，不写入任何文件）；随后 CI 以 `run_demo.py --recorded` 在干净环境中用该输出完成修改前后测试、状态保存与复用验证。配置 `MINIMAX_API_KEY` 后，`python run_demo.py` 在同一流程内实时调用 MiniMax。
 
-正式请求全文保存在 `evidence/minimax-request.txt`。其中包含完整模块实现描述、来自真实 seekdb 的三条来源和查询方式、PowerContext 恢复的任务摘要、业务函数全部算法及测试要求。没有上传凭据或私有用户数据；样例为合成任务列表。
+## 早期网页会话（2026-10-28，未采用为最终代码）
 
-额度控制：正式阶段只发出一次请求，要求只回复最终函数代码，不使用工具，不查文件、不装依赖、不执行测试。本地测试独立核对实际返回结果。
-
-本地预先完成代码与 MiniMax 最终输出分别保留，避免把本地预案记作 MiniMax 独立设计。
-
-正式请求已完成，网页显示执行11秒，回复仅含业务代码。原始代码块保存为 `evidence/minimax-response.py`，并原样用于 `sample/after/task_service.py`。本地预先实现为 `evidence/local-task_service.py`。最终业务文件增加了 MiniMax 的来源注释、函数说明及更具体的异常消息，逻辑严格遵循提示中的规格。与初始业务代码的差异见 `evidence/final-change.diff`。
-
-采用输出后，`verify_sample.py` 的同组7项测试在修改前退出1、修改后退出0；包含记录端不strip的约束。同一测试文件的哈希在两个版本完全相同。`verify_context.py` 随后验证真实数据库资料更新与跨进程状态恢复，保存的任务状态已包含MiniMax代码采用和复测完成。
-
-没有提交平台测评，未声称获得20分。未继续发送额外提示。
+此前队员通过 MiniMax 网页端（`https://agent.minimax.cn/`，M3.1-Flash）进行过一次探路请求和一次正式请求，请求中给出了完整实现描述。记录保留于 `evidence/minimax-request.txt`、`evidence/minimax-response.py`、`evidence/final-change.diff`、`evidence/local-task_service.py`，以说明真实过程；最终业务代码以上面的 API 记录为准。
