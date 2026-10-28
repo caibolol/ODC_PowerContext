@@ -1,4 +1,7 @@
-__pycache__/
-*.pyc
-.venv/
-.pagetrail/
+node_modules/
+.env
+*.log
+.DS_Store
+coverage/
+dist/
+*.qoder.site
