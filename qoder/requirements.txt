@@ -1,0 +1,4 @@
+# pyseekdb 在 Linux / macOS(arm64) 上会自动带上嵌入式引擎；
+# Windows 需要显式安装 pylibseekdb（官方提供 win_amd64 轮子）。
+pyseekdb==1.4.0.post1
+pylibseekdb==1.4.0.post2; sys_platform == "win32"
