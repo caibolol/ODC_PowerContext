@@ -4,6 +4,11 @@ on:
     branches: [claude/minimax]
     paths: ['minimax/**', '.github/workflows/minimax-demo.yml']
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Commit or branch whose minimax/ directory is verified (default: this branch)"
+        type: string
+        default: ""
 permissions:
   contents: read
 jobs:
@@ -19,6 +24,10 @@ jobs:
       PC_URL: http://127.0.0.1:18752
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+      - name: Verified revision
+        run: git rev-parse HEAD | tee verified-revision.txt
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -74,5 +83,6 @@ jobs:
             minimax/sample/after
             minimax/pip-freeze.txt
             seekdb-image.txt
+            verified-revision.txt
             ${{ runner.temp }}/powercontext.log
           retention-days: 30
