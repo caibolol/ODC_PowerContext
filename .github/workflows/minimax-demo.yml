@@ -1,0 +1,78 @@
+name: MiniMax SDD demo
+on:
+  push:
+    branches: [claude/minimax]
+    paths: ['minimax/**', '.github/workflows/minimax-demo.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  demo:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "2881"
+      DB_USER: root
+      DB_PASSWORD: ""
+      DB_NAME: minimax_sdd
+      PC_URL: http://127.0.0.1:18752
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Start seekdb (official image)
+        run: |
+          docker run -d --name seekdb -p 2881:2881 oceanbase/seekdb:latest
+          docker image inspect oceanbase/seekdb:latest --format '{{index .RepoDigests 0}}' | tee seekdb-image.txt
+      - name: Install dependencies
+        working-directory: minimax
+        run: |
+          python -m pip install -r requirements.txt
+          python -m pip install "powercontext[cli,server] @ git+https://github.com/caibolol/ODC_PowerContext.git@da0cb9c2e945d6363725b3abfc4f40a854bf9d29"
+          python -m pip freeze > pip-freeze.txt
+      - name: Start PowerContext (empty state)
+        run: |
+          export POWERCONTEXT_HOME="$RUNNER_TEMP/powercontext"
+          mkdir -p "$POWERCONTEXT_HOME"
+          (powercontext server run --no-env-file --host 127.0.0.1 --port 18752 > "$RUNNER_TEMP/powercontext.log" 2>&1 &)
+      - name: Wait for services
+        run: |
+          python - <<'PY'
+          import time, urllib.request, pymysql
+          for name, check in (('seekdb', lambda: pymysql.connect(host='127.0.0.1', port=2881, user='root', password='').close()),
+                              ('PowerContext', lambda: urllib.request.urlopen('http://127.0.0.1:18752/v1/scopes', timeout=5))):
+              for attempt in range(120):
+                  try:
+                      check(); print(name, 'ready'); break
+                  except urllib.error.HTTPError:
+                      print(name, 'ready (HTTP answered)'); break
+                  except Exception as error:
+                      last = error; time.sleep(3)
+              else:
+                  raise SystemExit(f'{name} not ready: {last!r}')
+          PY
+      - name: Demo (live MiniMax when the secret exists, else recorded output)
+        working-directory: minimax
+        env:
+          MINIMAX_API_KEY: ${{ secrets.MINIMAX_API_KEY }}
+        run: |
+          if [ -n "$MINIMAX_API_KEY" ]; then python run_demo.py; else python run_demo.py --recorded; fi
+      - name: Teammate verification scripts
+        working-directory: minimax
+        run: |
+          python verify_sample.py
+          python verify_context.py
+      - name: Keep evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: minimax-demo-evidence
+          path: |
+            minimax/evidence
+            minimax/sample/after
+            minimax/pip-freeze.txt
+            seekdb-image.txt
+            ${{ runner.temp }}/powercontext.log
+          retention-days: 30
