@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import re
+import time
 import urllib.request
 
 import pymysql
@@ -156,8 +157,10 @@ def latest_progress(state, task):
             value = json.loads(entry.get('text', ''))
         except (TypeError, ValueError):
             continue
-        if isinstance(value, dict) and value.get('task') == task:
-            best = value     # 列表按写入顺序返回，保留最后一条
+        # 列表顺序不保证为写入顺序：按 save 写入的 saved_at 取最新一条
+        if isinstance(value, dict) and value.get('task') == task and (
+                best is None or value.get('saved_at', 0) >= best.get('saved_at', 0)):
+            best = value
     if best is None:
         return {'completed': [], 'todo': [], 'verification': [], 'source': None}
     return {'completed': best.get('completed', []), 'todo': best.get('todo', []),
@@ -250,6 +253,7 @@ def main():
     else:
         # 用户显式调用 save 时才保存项目状态，不包含账号或密钥。
         state = json.loads(Path(args.state).read_text(encoding='utf-8'))
+        state['saved_at'] = time.time_ns()
         result = pc('/v1/memory/remember', {'scope_id': args.scope,
             'kind': 'task-progress', 'text': json.dumps(state, ensure_ascii=False)})
     print(json.dumps(result, ensure_ascii=False, indent=2))
