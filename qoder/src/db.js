@@ -1,13 +1,17 @@
-const mysql = require('mysql2/promise');
-
 let pool = null;
 let connectionStatus = { connected: false, error: null, lastCheck: null };
 
-function getPool() {
-  if (!pool) {
+function backendMode() {
+  return process.env.DB_MODE || 'embedded';
+}
+
+async function getPool() {
+  if (pool) return pool;
+  if (backendMode() === 'server') {
+    const mysql = require('mysql2/promise');
     pool = mysql.createPool({
       host: process.env.DB_HOST || '127.0.0.1',
-      port: parseInt(process.env.DB_PORT || '2881'),
+      port: parseInt(process.env.DB_PORT || '2881', 10),
       database: process.env.DB_NAME || 'test',
       user: process.env.DB_USER || 'root',
       password: process.env.DB_PASSWORD || '',
@@ -17,13 +21,15 @@ function getPool() {
       connectTimeout: 10000,
       charset: 'utf8mb4'
     });
+  } else {
+    pool = await require('./embedded').getDriver();
   }
   return pool;
 }
 
 async function checkConnection() {
   try {
-    const p = getPool();
+    const p = await getPool();
     const conn = await p.getConnection();
     await conn.ping();
     conn.release();
@@ -38,11 +44,16 @@ async function checkConnection() {
 function getConnectionStatus() {
   return {
     ...connectionStatus,
-    config: {
+    mode: backendMode(),
+    config: backendMode() === 'server' ? {
       host: process.env.DB_HOST || '127.0.0.1',
-      port: parseInt(process.env.DB_PORT || '2881'),
+      port: parseInt(process.env.DB_PORT || '2881', 10),
       database: process.env.DB_NAME || 'test',
       user: process.env.DB_USER || 'root'
+    } : {
+      engine: 'seekdb embedded (in-process SQL engine)',
+      dir: process.env.EMBEDDED_DB_DIR || '.evidencedesk-seekdb',
+      database: process.env.DB_NAME || 'test'
     }
   };
 }
@@ -97,7 +108,7 @@ async function ensureFulltextIndex(conn, indexName, column) {
 }
 
 async function initDatabase() {
-  const p = getPool();
+  const p = await getPool();
   const conn = await p.getConnection();
 
   try {
@@ -140,7 +151,7 @@ async function initDatabase() {
 }
 
 async function createExcerpt({ title, source_url, source_page, body_text, tags }) {
-  const p = getPool();
+  const p = await getPool();
   const [result] = await p.execute(
     `INSERT INTO odc_qoder_excerpts (title, source_url, source_page, body_text, tags)
      VALUES (?, ?, ?, ?, ?)`,
@@ -150,7 +161,7 @@ async function createExcerpt({ title, source_url, source_page, body_text, tags }
 }
 
 async function getExcerpt(id) {
-  const p = getPool();
+  const p = await getPool();
   const [rows] = await p.execute(
     `SELECT e.*, COALESCE(r.state, 'unread') AS state, r.notes as review_notes
      FROM odc_qoder_excerpts e
@@ -162,7 +173,7 @@ async function getExcerpt(id) {
 }
 
 async function listExcerpts({ limit = 50, offset = 0, tag, state } = {}) {
-  const p = getPool();
+  const p = await getPool();
   let sql = `SELECT e.*, COALESCE(r.state, 'unread') AS state, r.notes as review_notes
              FROM odc_qoder_excerpts e
              LEFT JOIN odc_qoder_review_states r ON e.id = r.excerpt_id`;
@@ -190,7 +201,7 @@ async function listExcerpts({ limit = 50, offset = 0, tag, state } = {}) {
 }
 
 async function searchExcerpts(query, { limit = 50, tag, state } = {}) {
-  const p = getPool();
+  const p = await getPool();
 
   let sql = `SELECT e.*,
              MATCH(e.body_text) AGAINST(? IN NATURAL LANGUAGE MODE) as body_score,
@@ -229,7 +240,7 @@ async function searchExcerpts(query, { limit = 50, tag, state } = {}) {
 }
 
 async function updateReviewState(excerptId, state, notes) {
-  const p = getPool();
+  const p = await getPool();
   await p.execute(
     `INSERT INTO odc_qoder_review_states (excerpt_id, state, notes)
      VALUES (?, ?, ?)
@@ -240,7 +251,7 @@ async function updateReviewState(excerptId, state, notes) {
 }
 
 async function getReviewState(excerptId) {
-  const p = getPool();
+  const p = await getPool();
   const [rows] = await p.execute(
     `SELECT * FROM odc_qoder_review_states WHERE excerpt_id = ?`,
     [excerptId]
@@ -249,7 +260,7 @@ async function getReviewState(excerptId) {
 }
 
 async function getStats() {
-  const p = getPool();
+  const p = await getPool();
   const [rows] = await p.execute(`
     SELECT
       COUNT(*) as total,
@@ -274,7 +285,7 @@ async function getStats() {
 }
 
 async function deleteExcerpt(id) {
-  const p = getPool();
+  const p = await getPool();
   const [result] = await p.execute('DELETE FROM odc_qoder_excerpts WHERE id = ?', [id]);
   return result.affectedRows > 0;
 }
@@ -288,6 +299,7 @@ async function closePool() {
 
 module.exports = {
   getPool,
+  backendMode,
   checkConnection,
   getConnectionStatus,
   initDatabase,

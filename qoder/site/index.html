@@ -1015,9 +1015,9 @@
           </div>
           <div class="hero-pills" aria-label="技术栈">
             <span class="pill"><b>Node.js</b> + Express</span>
-            <span class="pill"><b>mysql2</b> 连接池</span>
-            <span class="pill"><b>seekdb</b> 127.0.0.1:2881</span>
+            <span class="pill"><b>seekdb</b> 嵌入式 / 服务端双形态</span>
             <span class="pill"><b>FULLTEXT</b> WITH PARSER ik</span>
+            <span class="pill"><b>PowerContext</b> 跨会话记忆</span>
             <span class="pill"><b>零</b> 外部模型 API</span>
           </div>
         </div>
@@ -1027,8 +1027,9 @@
             <span><span class="pulse" aria-hidden="true"></span>本机运行状态</span>
             <span class="mono">127.0.0.1:18748</span>
           </div>
-          <div class="runtime-row"><span>数据库连接</span><strong class="ok">seekdb 已连接</strong></div>
+          <div class="runtime-row"><span>数据库连接</span><strong class="ok">seekdb 嵌入式（默认）/ 服务端可选</strong></div>
           <div class="runtime-row"><span>全文索引</span><strong>ft_body / ft_title · IK</strong></div>
+          <div class="runtime-row"><span>跨会话记忆</span><strong>PowerContext · 复习进度复用</strong></div>
           <div class="runtime-row"><span>数据表</span><strong>odc_qoder_ 前缀</strong></div>
           <div class="runtime-row"><span>集成测试</span><strong class="ok">81 / 81 通过</strong></div>
           <div class="terminal" aria-label="真实检索语句示意">
@@ -1139,9 +1140,10 @@
       <div class="shell">
         <div class="section-head reveal">
           <p class="kicker">03 · 技术架构</p>
-          <h2>一条清晰的查询链路：浏览器 → API → 连接池 → seekdb。</h2>
+          <h2>一条清晰的查询链路：浏览器 → API → seekdb；记忆链路：复习更新 → PowerContext → 下次会话复用。</h2>
           <p class="section-lead">
-            后端是 Node.js + Express + mysql2。没有外部模型 API，也没有付费服务；数据库层只创建 <code>odc_qoder_</code> 前缀表。
+            后端是 Node.js + Express。检索由 seekdb 执行（默认嵌入式原生包，可选服务端 mysql2 连接池），同一套 SQL 与 IK 解析器；
+            每次复习状态更新写入 PowerContext 记忆快照，启动时读回复用。没有外部模型 API，也没有付费服务；数据库层只创建 <code>odc_qoder_</code> 前缀表。
           </p>
         </div>
         <div class="arch-wrap reveal">

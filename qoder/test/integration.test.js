@@ -38,7 +38,7 @@ async function run(createdIds) {
   await db.initDatabase();
   assert(true, 'Schema initialized without errors');
 
-  const p = db.getPool();
+  const p = await db.getPool();
   const [ddlRows] = await p.query('SHOW CREATE TABLE odc_qoder_excerpts');
   const ddlText = ddlRows[0]['Create Table'];
   assert(

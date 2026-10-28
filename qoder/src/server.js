@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const db = require('./db');
+const context = require('./context');
 const { SAMPLE_DATA } = require('./sample-data');
 
 const app = express();
@@ -179,9 +180,27 @@ app.put('/api/excerpts/:id/review', async (req, res) => {
     }
 
     await db.updateReviewState(parseInt(req.params.id), state, notes?.trim() || null);
+    db.getStats()
+      .then(stats => context.rememberProgress({
+        excerpt_id: parseInt(req.params.id),
+        state,
+        stats,
+        at: new Date().toISOString()
+      }))
+      .catch(err => console.warn('[Context] 记忆写入失败（不影响主功能）:', err.message));
     res.json({ message: '更新成功' });
   } catch (err) {
     res.status(500).json({ error: '更新失败', detail: err.message });
+  }
+});
+
+app.get('/api/context', async (req, res) => {
+  try {
+    const st = await context.status();
+    const latest = st.connected ? await context.latestProgress().catch(() => null) : null;
+    res.json({ ...st, latest_progress: latest });
+  } catch (err) {
+    res.status(500).json({ error: '读取上下文失败', detail: err.message });
   }
 });
 
@@ -313,6 +332,11 @@ async function start() {
 
   await db.initDatabase();
   console.log('[EvidenceDesk] Database schema initialized');
+  console.log(`[EvidenceDesk] Backend mode: ${db.backendMode()}`);
+  context.status().then(st => {
+    if (st.connected) console.log(`[Context] PowerContext 已连接 ${st.url}（scope ${st.scope_id}）`);
+    else console.warn(`[Context] PowerContext 未连接（${st.error}）——记忆层降级，检索主功能不受影响`);
+  });
 
   app.listen(PORT, HOST, () => {
     console.log(`[EvidenceDesk] Server running at http://${HOST}:${PORT}`);

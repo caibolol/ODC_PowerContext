@@ -5,3 +5,9 @@ node_modules/
 coverage/
 dist/
 *.qoder.site
+.evidencedesk-seekdb/
+.venv-pc/
+.pc-home/
+.pc.log
+.pc.err.log
+.pc.pid
