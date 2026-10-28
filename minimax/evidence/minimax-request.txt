@@ -1,0 +1,9 @@
+本地完整实现和验证已完成。以下是完整代码的自然语言描述与本次任务要求。请直接据此生成最终 task_service.py；只回复一个 Python 代码块（约15行），不要调用工具、查找工作区、安装依赖、创建计划或运行测试，我会在本地运行现有测试。此前工作区里的扩展行为不采用，请严格按本条规格生成。
+
+完整项目实现：Python CLI context.py 有 ingest、scope、context、save 四个入口。ingest 从 manifest.json 读取 sources，每项有相对路径、kind（spec/code/test）、tasks；验证路径在项目内，读取内容并计算SHA-256。PyMySQL连接真实seekdb，sdd_sources表包含project_id、path、kind、tasks(JSON文本)、content、sha256，主键(project_id,path)；事务删除该项目旧记录再插入本次完整资料。context 参数绑定执行 SELECT path,kind,tasks,content,sha256 FROM sdd_sources WHERE project_id=%s ORDER BY kind,path，再按tasks包含TASK-2筛选，未知任务报错。PowerContext经HTTP创建带幂等键的scope，save用/v1/memory/remember保存kind=task-progress的任务JSON，context用/v1/memory/entries/list读回scope状态，返回sources、previous_state和真实查询记录。每次CLI运行均为独立进程。真实数据库导入、规格修改后重新导入、新内容输出、从空状态写入与模块重启后复用都已本地通过。无需重写这些已完成组件。
+
+本次由你参与的实际代码修改：TASK-2。真实数据库检索选中了spec.md、before/task_service.py、test_task_service.py三条来源，三种kind齐全。来源spec.md的TASK-1要求无筛选保序并返回列表副本；TASK-2要求增加状态筛选。初始业务文件的list_tasks函数接收tasks和status=None，始终返回list(tasks)，尚未实现筛选。测试文件包含无筛选副本、空列表、done筛选、参数空白大小写、缺省todo、非法参数和输入不变，共7项；相同测试修改前退出1，修改后退出0。PowerContext恢复的状态为：本地实现、7项测试、规格更新检索已完成；待办为采用MiniMax实际输出代码并复测。
+
+最终函数的完整实现逻辑已经确定：签名保持list_tasks(tasks, status=None)。status是None则立即返回list(tasks)；否则对筛选参数调用strip().casefold()得到normalized；若不在todo/done集合中，抛ValueError（即使tasks为空也先验证）；返回列表推导，逐条取task.get('status','todo').casefold()，仅保留等于normalized的记录。记录状态只做casefold，不做strip；例如记录status=' DONE '不能匹配筛选'done'。保持顺序，不修改原列表或字典。输入契约：tasks是字典列表，记录status若存在为字符串，筛选参数为字符串或None。无需添加显式None状态兜底、额外类型转换、数据清洗或新的异常策略。代码用简短中文注释，可加一行函数说明。
+
+请现在生成该最终业务文件代码。我会真实保存你的输出并用上述相同测试验证，开发记录如实注明你收到完整实现描述后参与代码生成。

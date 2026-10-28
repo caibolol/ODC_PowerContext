@@ -1,0 +1,42 @@
+[
+  {
+    "stage": "before",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "E:\\GitHub\\ODC_ecosystem\\minimax\\sample",
+      "-p",
+      "test_task_service.py",
+      "-v"
+    ],
+    "exit_code": 1,
+    "code_sha256": "0253b9f71074bdaec7d0967b19c98ecd1b39c2e2746fc793dc222fa5abe8e270",
+    "tests_sha256": "d9dad3c12344d83ac7dbac32d7a200fb593f3f1e33b3c5c7b58229b137429190",
+    "stdout": "",
+    "stderr": "test_done (test_task_service.FeatureTests.test_done) ... FAIL\ntest_empty_filtered (test_task_service.FeatureTests.test_empty_filtered) ... ok\ntest_invalid (test_task_service.FeatureTests.test_invalid) ... \n  test_invalid (test_task_service.FeatureTests.test_invalid) (value='') ... FAIL\n  test_invalid (test_task_service.FeatureTests.test_invalid) (value='pending') ... FAIL\n  test_invalid (test_task_service.FeatureTests.test_invalid) (value='   ') ... FAIL\ntest_no_mutation (test_task_service.FeatureTests.test_no_mutation) ... ok\ntest_normalization_and_default (test_task_service.FeatureTests.test_normalization_and_default) ... FAIL\ntest_empty_unfiltered (test_task_service.RegressionTests.test_empty_unfiltered) ... ok\ntest_no_filter (test_task_service.RegressionTests.test_no_filter) ... ok\n\n======================================================================\nFAIL: test_done (test_task_service.FeatureTests.test_done)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"E:\\GitHub\\ODC_ecosystem\\minimax\\sample\\test_task_service.py\", line 20, in test_done\n    self.assertEqual(list_tasks(rows, 'done'), [rows[1]])\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Lists differ: [{'id': 1}, {'id': 2, 'status': 'DONE'}, {'id': 3, 'status': ' DONE '}] != [{'id': 2, 'status': 'DONE'}]\n\nFirst differing element 0:\n{'id': 1}\n{'id': 2, 'status': 'DONE'}\n\nFirst list contains 2 additional elements.\nFirst extra element 1:\n{'id': 2, 'status': 'DONE'}\n\n- [{'id': 1}, {'id': 2, 'status': 'DONE'}, {'id': 3, 'status': ' DONE '}]\n+ [{'id': 2, 'status': 'DONE'}]\n\n======================================================================\nFAIL: test_invalid (test_task_service.FeatureTests.test_invalid) (value='')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"E:\\GitHub\\ODC_ecosystem\\minimax\\sample\\test_task_service.py\", line 28, in test_invalid\n    with self.subTest(value=value), self.assertRaises(ValueError):\n                                    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^\nAssertionError: ValueError not raised\n\n======================================================================\nFAIL: test_invalid (test_task_service.FeatureTests.test_invalid) (value='pending')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"E:\\GitHub\\ODC_ecosystem\\minimax\\sample\\test_task_service.py\", line 28, in test_invalid\n    with self.subTest(value=value), self.assertRaises(ValueError):\n                                    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^\nAssertionError: ValueError not raised\n\n======================================================================\nFAIL: test_invalid (test_task_service.FeatureTests.test_invalid) (value='   ')\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"E:\\GitHub\\ODC_ecosystem\\minimax\\sample\\test_task_service.py\", line 28, in test_invalid\n    with self.subTest(value=value), self.assertRaises(ValueError):\n                                    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^\nAssertionError: ValueError not raised\n\n======================================================================\nFAIL: test_normalization_and_default (test_task_service.FeatureTests.test_normalization_and_default)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"E:\\GitHub\\ODC_ecosystem\\minimax\\sample\\test_task_service.py\", line 24, in test_normalization_and_default\n    self.assertEqual(list_tasks(rows, ' ToDo '), rows[:2])\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Lists differ: [{'id': 3}, {'id': 1, 'status': 'TODO'}, {'id': 2, 'status': 'done'}] != [{'id': 3}, {'id': 1, 'status': 'TODO'}]\n\nFirst list contains 1 additional elements.\nFirst extra element 2:\n{'id': 2, 'status': 'done'}\n\n- [{'id': 3}, {'id': 1, 'status': 'TODO'}, {'id': 2, 'status': 'done'}]\n+ [{'id': 3}, {'id': 1, 'status': 'TODO'}]\n\n----------------------------------------------------------------------\nRan 7 tests in 0.002s\n\nFAILED (failures=5)\n"
+  },
+  {
+    "stage": "after",
+    "command": [
+      "C:\\Python314\\python.exe",
+      "-B",
+      "-m",
+      "unittest",
+      "discover",
+      "-s",
+      "E:\\GitHub\\ODC_ecosystem\\minimax\\sample",
+      "-p",
+      "test_task_service.py",
+      "-v"
+    ],
+    "exit_code": 0,
+    "code_sha256": "74912e5ccbe725300796f718bfef8f6891c8901d1d5bdffa87cf0691f62a99bc",
+    "tests_sha256": "d9dad3c12344d83ac7dbac32d7a200fb593f3f1e33b3c5c7b58229b137429190",
+    "stdout": "",
+    "stderr": "test_done (test_task_service.FeatureTests.test_done) ... ok\ntest_empty_filtered (test_task_service.FeatureTests.test_empty_filtered) ... ok\ntest_invalid (test_task_service.FeatureTests.test_invalid) ... ok\ntest_no_mutation (test_task_service.FeatureTests.test_no_mutation) ... ok\ntest_normalization_and_default (test_task_service.FeatureTests.test_normalization_and_default) ... ok\ntest_empty_unfiltered (test_task_service.RegressionTests.test_empty_unfiltered) ... ok\ntest_no_filter (test_task_service.RegressionTests.test_no_filter) ... ok\n\n----------------------------------------------------------------------\nRan 7 tests in 0.000s\n\nOK\n"
+  }
+]

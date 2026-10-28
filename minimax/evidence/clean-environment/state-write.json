@@ -1,0 +1,24 @@
+{
+  "memory": {
+    "family": "memory",
+    "artifact_id": "memory",
+    "revision": 1
+  },
+  "entry": {
+    "citation": {
+      "memory_ref": {
+        "family": "memory",
+        "artifact_id": "memory",
+        "revision": 1
+      },
+      "entry_id": "mem_ent_47327b9912c94a2a924328f57d7f4fea",
+      "entry_version_id": "mem_ver_9b8e4575ce5f4062a9b876161482a8f8"
+    },
+    "version": 1,
+    "kind": "task-progress",
+    "text": "{\"task\": \"TASK-2\", \"completed\": [\"已完成本地实现\", \"7项测试通过\", \"规格更新检索验证通过\", \"已采用MiniMax正式回复的业务代码并通过相同7项测试\"], \"todo\": [\"提交固定版本后等待平台评审\"], \"tests\": [{\"stage\": \"before\", \"exit_code\": 1, \"code_sha256\": \"0253b9f71074bdaec7d0967b19c98ecd1b39c2e2746fc793dc222fa5abe8e270\", \"tests_sha256\": \"d9dad3c12344d83ac7dbac32d7a200fb593f3f1e33b3c5c7b58229b137429190\"}, {\"stage\": \"after\", \"exit_code\": 0, \"code_sha256\": \"74912e5ccbe725300796f718bfef8f6891c8901d1d5bdffa87cf0691f62a99bc\", \"tests_sha256\": \"d9dad3c12344d83ac7dbac32d7a200fb593f3f1e33b3c5c7b58229b137429190\"}]}",
+    "state": "active",
+    "source_refs": [],
+    "artifact_refs": []
+  }
+}

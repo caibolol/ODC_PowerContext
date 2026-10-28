@@ -1,0 +1,5 @@
+{"sources":[
+  {"path":"spec.md","kind":"spec","tasks":["TASK-2"]},
+  {"path":"before/task_service.py","kind":"code","tasks":["TASK-2"]},
+  {"path":"test_task_service.py","kind":"test","tasks":["TASK-2"]}
+]}
