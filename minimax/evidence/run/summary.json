@@ -1,15 +1,15 @@
 {
-  "run_id": "02e5a7898e08",
-  "git_revision": "b59af2ffe9fe60b61b1e77d805639fc933956ca6",
-  "project": "taskboard-02e5a7898e08",
+  "run_id": "92c2f8b4b0ce",
+  "git_revision": "d0cd18c7088c99a4e9131a4f79f1728645da9bad",
+  "project": "taskboard-92c2f8b4b0ce",
   "task": "TASK-2",
   "minimax": "recorded",
   "ingest": {
-    "project": "taskboard-02e5a7898e08",
+    "project": "taskboard-92c2f8b4b0ce",
     "imported": 3,
     "indexed_entries": 10
   },
-  "scope_id": "scp_7vp5ry7re4xjt0vk6bc9agrjvb",
+  "scope_id": "scp_1vw14vc5xj6sgbk0zq7zcn3c2m",
   "before_sha256": "e233a73b2736188e2fe9a8790ca9533a09a4d9dc9ec86110ee17e762a7ded978",
   "after_sha256": "fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4",
   "tests_sha256": "2c01d2de7e49987f1ead4e38a0916f4a7f3bae40dcfcf701d24a171435f899a7",
