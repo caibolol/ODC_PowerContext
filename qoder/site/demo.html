@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>研读档案 EvidenceDesk · 在线体验（演示模式）</title>
-<meta name="description" content="EvidenceDesk 主要功能在线体验：全文检索与相关度排序、资料录入、复习状态管理、Markdown 导出。演示模式数据保存在浏览器本地；真实部署连接 seekdb FULLTEXT IK。">
+<title>研读档案 EvidenceDesk · 在线体验（真实 seekdb 后端）</title>
+<meta name="description" content="EvidenceDesk 主要功能在线体验：全文检索与相关度排序、资料录入、复习状态管理、Markdown 导出。数据真实存储于 seekdb 云实例，由 Qoder Sites Function 后端服务。">
 <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
 <style>
   :root {
@@ -25,14 +25,16 @@
   header.top a.back { color: #7dd3fc; text-decoration: none; font-size: 14px; }
   header.top strong { font-size: 16px; }
   header.top .mode { margin-left: auto; font-size: 12px; background: rgba(20,184,166,.16); color: #5eead4; border: 1px solid rgba(20,184,166,.4); padding: 3px 10px; border-radius: 999px; }
-  .notice { background: var(--amber-soft); border: 1px solid #fcd34d; color: #78350f; border-radius: var(--radius); padding: 12px 16px; margin: 18px 0; font-size: 14px; }
-  .notice b { color: #92400e; }
+  .notice { background: var(--green-soft); border: 1px solid #86efac; color: #14532d; border-radius: var(--radius); padding: 12px 16px; margin: 18px 0; font-size: 14px; }
+  .notice b { color: #166534; }
   .bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 10px 0 18px; }
   .chip { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 4px 12px; font-size: 13px; color: var(--muted); }
   .chip b { color: var(--ink); }
   .chip.ok { border-color: #86efac; background: var(--green-soft); color: var(--green); }
+  .chip.err { border-color: #fca5a5; background: var(--red-soft); color: var(--red); }
   button { font-family: inherit; font-size: 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); padding: 8px 14px; cursor: pointer; }
   button:hover { border-color: #94a3b8; }
+  button:disabled { opacity: .55; cursor: wait; }
   button.primary { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
   button.primary:hover { background: #115e59; }
   button.danger { color: var(--red); }
@@ -73,18 +75,16 @@
   <div class="shell">
     <a class="back" href="index.html">← 返回作品介绍页</a>
     <strong>研读档案 EvidenceDesk · 在线体验</strong>
-    <span class="mode">演示模式 · 数据保存在本浏览器</span>
+    <span class="mode" id="modeBadge">连接中…</span>
   </div>
 </header>
 
 <main class="shell">
   <div class="notice">
-    <b>演示模式说明：</b>本页面让你在<b>无需部署</b>的情况下体验 EvidenceDesk 的主要功能
-    （全文检索与相关度排序、资料录入、复习状态管理、样例导入、Markdown 导出）。
-    演示数据与读写状态保存在你的浏览器本地（localStorage）；相关度为浏览器本地对全文自然语言模式的
-    tf-idf 近似（标题权重 ×2，与数据库排序公式一致）。<b>真实部署的检索由 OceanBase seekdb 的
-    FULLTEXT 索引（IK 解析器）+ MATCH AGAINST 完成</b>，步骤见介绍页「运行与复现」或仓库 README。
-    样例均为合成教学内容，example.com 为占位来源，不是真实文献。
+    <b>真实后端说明：</b>本页所有操作（检索、录入、复习状态、导出）都通过 Qoder Sites Function 后端
+    访问<b>真实 seekdb 数据库</b>（MySQL 协议 over TLS，IK 全文索引 + MATCH AGAINST 相关度排序），
+    数据持久保存在数据库实例中，刷新或换浏览器仍可读取。样例均为合成教学内容，example.com 为占位来源，不是真实文献。
+    本地部署（嵌入式 / 服务端 seekdb + PowerContext 记忆层）见介绍页「运行与复现」或仓库 README。
   </div>
 
   <div class="bar" id="statusBar"></div>
@@ -152,7 +152,7 @@
   </section>
 
   <footer>
-    在线体验页由 Qoder 开发并发布在 Qoder Sites。项目源码与 seekdb 真实部署说明见
+    在线体验页由 Qoder 开发并发布在 Qoder Sites；后端为同站 Function，数据库为 seekdb 云实例。项目源码与本地部署说明见
     <a href="https://github.com/caibolol/ODC_PowerContext/tree/2026-competition-ecosystem/qoder" target="_blank" rel="noopener noreferrer">代码仓库 qoder/ 目录</a>。
   </footer>
 </main>
@@ -160,272 +160,82 @@
 <script>
 (function () {
   'use strict';
-
-  var SAMPLE_DATA = [
-    { title: "OceanBase 分布式数据库架构设计", source_url: "https://example.com/synthetic/oceanbase-arch", source_page: "12-15", body_text: "OceanBase 采用 shared-nothing 架构，每个节点运行完整的数据库引擎副本。数据通过多副本 Paxos 协议保持一致性，支持强同步和异步复制模式。Zone 是物理隔离单元，Region 用于跨地域容灾。", tags: "数据库,分布式,OceanBase,架构" },
-    { title: "Introduction to Full-Text Search in MySQL", source_url: "https://example.com/synthetic/mysql-ft", source_page: "45-48", body_text: "MySQL full-text search uses inverted indexes to efficiently locate documents containing specific terms. The MATCH() function with AGAINST() clause supports natural language mode and boolean mode. Relevance ranking is computed using term frequency and inverse document frequency.", tags: "MySQL,fulltext,search,index" },
-    { title: "Paxos 共识算法原理与实践", source_url: "https://example.com/synthetic/paxos", source_page: "23-30", body_text: "Paxos 算法分为 Proposer、Acceptor 和 Learner 三种角色。Prepare 阶段获取提案编号承诺，Accept 阶段确认实际提案。Multi-Paxos 通过固定 Leader 减少通信轮次，是分布式数据库一致性的基础协议。", tags: "分布式,共识,Paxos,算法" },
-    { title: "Research Methods for Literature Review", source_url: "https://example.com/synthetic/lit-review", source_page: "8-11", body_text: "Systematic literature review requires clear research questions, inclusion/exclusion criteria, and reproducible search strategies. Evidence synthesis involves coding themes across studies, assessing quality, and identifying gaps. Tools like Zotero and NVivo help organize sources and annotations.", tags: "research,methodology,literature,review" },
-    { title: "SQL 注入攻击与防御技术", source_url: "https://example.com/synthetic/sql-injection", source_page: "67-72", body_text: "SQL 注入通过在用户输入中嵌入恶意 SQL 片段来操纵数据库查询。防御手段包括参数化查询（预编译语句）、输入验证白名单、最小权限原则和 WAF 规则。参数绑定是最根本的防御方式，它将数据与指令分离。", tags: "安全,SQL注入,防御,参数化" },
-    { title: "LSM-Tree 存储引擎详解", source_url: "https://example.com/synthetic/lsm-tree", source_page: "34-40", body_text: "LSM-Tree 将随机写转换为顺序写，通过 MemTable、SSTable 和 Compaction 三层结构实现高吞吐写入。读取时需合并多层数据，可能产生读放大。Leveled Compaction 和 Tiered Compaction 是两种主流策略，分别优化读性能和写性能。", tags: "存储引擎,LSM-Tree,数据库,性能" },
-    { title: "Academic Writing and Citation Practices", source_url: "https://example.com/synthetic/academic-writing", source_page: "15-18", body_text: "Proper citation avoids plagiarism and strengthens academic arguments. APA, MLA, and Chicago styles each have specific rules for in-text citations and reference lists. When quoting directly, include page numbers. Paraphrasing still requires attribution to the original source.", tags: "academic,writing,citation,ethics" },
-    { title: "OceanBase 事务处理与 MVCC 机制", source_url: "https://example.com/synthetic/oceanbase-txn", source_page: "56-63", body_text: "OceanBase 支持行级锁和乐观锁两种并发控制模式。MVCC 通过多版本数据实现读写不冲突，每个事务看到一致性快照。事务日志持久化到 Clog 中，通过 Paxos 协议在副本间同步，确保 RPO=0 的金融级数据可靠性。", tags: "OceanBase,事务,MVCC,并发控制" },
-    { title: "Information Retrieval Evaluation Metrics", source_url: "https://example.com/synthetic/ir-metrics", source_page: "92-98", body_text: "Precision measures the fraction of retrieved documents that are relevant, while recall measures the fraction of relevant documents that are retrieved. F1 score balances both. Mean Average Precision (MAP) and Normalized Discounted Cumulative Gain (NDCG) account for ranking quality.", tags: "IR,evaluation,metrics,precision,recall" },
-    { title: "数据库索引设计最佳实践", source_url: "https://example.com/synthetic/index-design", source_page: "78-85", body_text: "B+Tree 索引适合等值查询和范围扫描，哈希索引仅支持等值查询。联合索引遵循最左前缀原则。覆盖索引可以避免回表查询。全文索引使用倒排结构，支持自然语言和布尔模式搜索。索引选择需权衡查询性能与写入开销。", tags: "数据库,索引,B+Tree,性能优化" }
-  ];
-
-  var STORE_KEY = 'evidencedesk_demo_v1';
+  var API = '/functions/v1/app/api';
   var STATE_LABEL = { unread: '未读', read: '已读', review: '待复习', mastered: '已掌握' };
+  var lastResults = [];
+  var lastQuery = '';
 
-  function loadStore() {
-    try {
-      var raw = localStorage.getItem(STORE_KEY);
-      if (raw) {
-        var s = JSON.parse(raw);
-        if (s && Array.isArray(s.excerpts)) return s;
-      }
-    } catch (e) { /* 存储不可用时退化为内存态 */ }
-    return { seq: 1, excerpts: [], reviews: {} };
-  }
-  function saveStore() {
-    try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) { /* 忽略 */ }
-  }
-  var store = loadStore();
-
+  function $(id) { return document.getElementById(id); }
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-
+  async function api(path, opts) {
+    const res = await fetch(API + path, Object.assign({ headers: { 'Content-Type': 'application/json' } }, opts));
+    const ct = res.headers.get('content-type') || '';
+    if (ct.includes('text/markdown')) return { res, blob: await res.blob() };
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+    return { res, data };
+  }
   function isSynthetic(item) {
     var h = ((item.source_url || '') + ' ' + (item.tags || '')).toLowerCase();
     return h.indexOf('example.com') >= 0 || h.indexOf('synthetic') >= 0 || h.indexOf('合成教学样例') >= 0;
   }
-
-  function stateOf(id) {
-    var r = store.reviews[id];
-    return r && r.state ? r.state : 'unread';
-  }
-  function notesOf(id) {
-    var r = store.reviews[id];
-    return r && r.notes ? r.notes : '';
-  }
-
-  // 浏览器本地分词：英文/数字按词，中文按二元组（近似 IK 的词语切分粒度）
-  function tokenize(text) {
-    var t = String(text || '').toLowerCase();
-    var out = [];
-    var re = /[a-z0-9]+|[一-鿿]+/g;
-    var m;
-    while ((m = re.exec(t))) {
-      var seg = m[0];
-      if (/[一-鿿]/.test(seg)) {
-        if (seg.length === 1) out.push(seg);
-        else for (var i = 0; i < seg.length - 1; i++) out.push(seg.slice(i, i + 2));
-      } else out.push(seg);
-    }
-    return out;
-  }
-
-  function scoreField(docTokens, qTokens, df, n) {
-    if (!qTokens.length || !docTokens.length) return 0;
-    var tf = {};
-    for (var i = 0; i < docTokens.length; i++) {
-      var w = docTokens[i];
-      if (qTokens.indexOf(w) >= 0) tf[w] = (tf[w] || 0) + 1;
-    }
-    var s = 0;
-    var seen = {};
-    for (var j = 0; j < qTokens.length; j++) {
-      var q = qTokens[j];
-      if (seen[q]) continue;
-      seen[q] = 1;
-      var f = tf[q] || 0;
-      if (!f) continue;
-      var d = df[q] || 0;
-      var idf = Math.log((n - d + 0.5) / (d + 0.5));
-      if (idf <= 0) continue;
-      s += (1 + Math.log(f)) * idf;
-    }
-    if (s <= 0) return 0;
-    return s / (1 + Math.log(docTokens.length));
-  }
-
-  function search(q, opts) {
-    opts = opts || {};
-    var n = store.excerpts.length;
-    var dfBody = {}, dfTitle = {};
-    var tokCache = {};
-    store.excerpts.forEach(function (e) {
-      var bt = tokenize(e.body_text), tt = tokenize(e.title);
-      tokCache[e.id] = { body: bt, title: tt };
-      function add(df, toks) {
-        var seen = {};
-        toks.forEach(function (w) { if (!seen[w]) { seen[w] = 1; df[w] = (df[w] || 0) + 1; } });
-      }
-      add(dfBody, bt); add(dfTitle, tt);
-    });
-    var qTokens = tokenize(q);
-    var rows = store.excerpts.map(function (e) {
-      var item = {
-        id: e.id, title: e.title, source_url: e.source_url, source_page: e.source_page,
-        body_text: e.body_text, tags: e.tags, state: stateOf(e.id), review_notes: notesOf(e.id)
-      };
-      if (qTokens.length) {
-        item.body_score = scoreField(tokCache[e.id].body, qTokens, dfBody, n);
-        item.title_score = scoreField(tokCache[e.id].title, qTokens, dfTitle, n);
-        item.relevance_score = item.body_score + 2 * item.title_score;
-      }
-      return item;
-    });
-    if (qTokens.length) rows = rows.filter(function (r) { return r.relevance_score > 0; });
-    if (opts.tag) rows = rows.filter(function (r) {
-      return (r.tags || '').split(',').map(function (t) { return t.trim(); }).indexOf(opts.tag) >= 0;
-    });
-    if (opts.state) rows = rows.filter(function (r) { return r.state === opts.state; });
-    if (qTokens.length) rows.sort(function (a, b) { return b.relevance_score - a.relevance_score; });
-    else rows.sort(function (a, b) { return b.id - a.id; });
-    return rows;
-  }
-
-  function getStats() {
-    var c = { unread: 0, read: 0, review: 0, mastered: 0 };
-    store.excerpts.forEach(function (e) { c[stateOf(e.id)]++; });
-    return { excerpts: store.excerpts.length, reviews: c };
-  }
-
-  function importSample() {
-    var added = 0;
-    SAMPLE_DATA.forEach(function (s) {
-      var dup = store.excerpts.some(function (e) { return e.source_url === s.source_url && e.title === s.title; });
-      if (dup) return;
-      store.excerpts.push({
-        id: store.seq++, title: s.title, source_url: s.source_url, source_page: s.source_page,
-        body_text: s.body_text, tags: s.tags, created_at: new Date().toISOString()
-      });
-      added++;
-    });
-    saveStore();
-    return added;
-  }
-
-  function validate(payload) {
-    var title = payload.title, body = payload.body_text, url = payload.source_url,
-        page = payload.source_page, tags = payload.tags;
-    if (!title || typeof title !== 'string' || title.trim().length === 0) return '标题不能为空';
-    if (title.length > 500) return '标题不能超过500字';
-    if (!body || typeof body !== 'string' || body.trim().length === 0) return '正文摘录不能为空';
-    if (body.length > 20000) return '正文摘录不能超过20000字';
-    if (url !== undefined && url !== null && typeof url !== 'string') return '来源URL类型不正确';
-    if (url && url.length > 1000) return '来源URL不能超过1000字符';
-    if (url && url.trim().length > 0 && !/^https?:\/\/.+/i.test(url)) return '来源URL格式不正确';
-    if (page !== undefined && page !== null && typeof page !== 'string') return '页码类型不正确';
-    if (page && page.length > 100) return '页码不能超过100字符';
-    if (tags !== undefined && tags !== null && typeof tags !== 'string') return '标签类型不正确';
-    if (tags && tags.length > 1000) return '标签不能超过1000字符';
-    return null;
-  }
-
-  function createExcerpt(payload) {
-    var err = validate(payload);
-    if (err) return { error: err };
-    var id = store.seq++;
-    store.excerpts.push({
-      id: id, title: payload.title, source_url: payload.source_url || null,
-      source_page: payload.source_page || null, body_text: payload.body_text,
-      tags: payload.tags || null, created_at: new Date().toISOString()
-    });
-    saveStore();
-    return { id: id };
-  }
-
-  function updateReviewState(id, state, notes) {
-    if (!store.excerpts.some(function (e) { return e.id === id; })) return { error: '资料不存在' };
-    if (['unread', 'read', 'review', 'mastered'].indexOf(state) < 0) return { error: '状态取值不正确' };
-    store.reviews[id] = { state: state, notes: notes || null };
-    saveStore();
-    return { ok: true };
-  }
-
-  function deleteExcerpt(id) {
-    var before = store.excerpts.length;
-    store.excerpts = store.excerpts.filter(function (e) { return e.id !== id; });
-    delete store.reviews[id];
-    saveStore();
-    return store.excerpts.length < before;
-  }
-
-  function buildMarkdown(rows, q) {
-    var md = '# 研读档案证据清单\n\n';
-    md += '导出时间: ' + new Date().toLocaleString('zh-CN') + '\n';
-    md += '记录数: ' + rows.length + '\n\n';
-    var hasSynthetic = rows.some(isSynthetic);
-    if (hasSynthetic) {
-      md += '> **数据性质说明**：本清单包含合成教学样例，example.com 为占位来源，不是真实文献或真实用户数据。带“合成教学样例 · 占位来源 · 非真实文献”标记的条目仅用于演示。\n\n';
-    }
-    if (q) md += '搜索关键词: ' + q.trim() + '\n\n';
-    md += '---\n\n';
-    rows.forEach(function (item, idx) {
-      md += '## ' + (idx + 1) + '. ' + item.title + '\n\n';
-      if (isSynthetic(item)) md += '- **数据性质**: 合成教学样例 · example.com 为占位来源 · 非真实文献\n';
-      if (item.source_url) md += '- **来源**: [' + item.source_url + '](' + item.source_url + ')\n';
-      if (item.source_page) md += '- **页码**: ' + item.source_page + '\n';
-      if (item.tags) md += '- **标签**: ' + item.tags + '\n';
-      if (item.state) md += '- **状态**: ' + (STATE_LABEL[item.state] || item.state) + '\n';
-      if (item.review_notes) md += '- **备注**: ' + item.review_notes + '\n';
-      md += '\n### 摘录内容\n\n' + item.body_text + '\n\n';
-      if (item.relevance_score !== undefined) md += '*相关度: ' + item.relevance_score.toFixed(4) + '*\n\n';
-      md += '---\n\n';
-    });
-    md += '> 导出来源：Qoder Sites 在线体验（演示模式）。真实部署导出由服务端 /api/export 生成，格式一致。\n';
-    return md;
-  }
-
-  // ---------- UI ----------
-  var lastResults = [];
-  var lastQuery = '';
-
-  function $(id) { return document.getElementById(id); }
-
-  function renderStatus() {
-    var st = getStats();
-    $('statusBar').innerHTML =
-      '<span class="chip ok">浏览器本地存储 · 已就绪</span>' +
-      '<span class="chip">资料总数 <b>' + st.excerpts + '</b></span>' +
-      '<span class="chip">未读 <b>' + st.reviews.unread + '</b></span>' +
-      '<span class="chip">已读 <b>' + st.reviews.read + '</b></span>' +
-      '<span class="chip">待复习 <b>' + st.reviews.review + '</b></span>' +
-      '<span class="chip">已掌握 <b>' + st.reviews.mastered + '</b></span>';
-    var tags = {};
-    store.excerpts.forEach(function (e) {
-      (e.tags || '').split(',').forEach(function (t) { t = t.trim(); if (t) tags[t] = 1; });
-    });
-    var sel = $('fTag'), cur = sel.value;
-    sel.innerHTML = '<option value="">全部标签</option>' + Object.keys(tags).sort().map(function (t) {
-      return '<option value="' + esc(t) + '">' + esc(t) + '</option>';
-    }).join('');
-    sel.value = cur;
-  }
-
   function badges(item) {
     var h = '<span class="badge state-' + esc(item.state) + '">' + esc(STATE_LABEL[item.state] || item.state) + '</span>';
     if (isSynthetic(item)) h += ' <span class="badge synthetic">合成样例 · 占位来源</span>';
     return h;
   }
 
+  async function refreshStatus() {
+    try {
+      const [health, stats] = await Promise.all([api('/health'), api('/stats')]);
+      $('modeBadge').textContent = 'seekdb 真实后端 · ' + (health.data.version || '已连接');
+      const s = stats.data;
+      $('statusBar').innerHTML =
+        '<span class="chip ok">seekdb 已连接（服务端持久化）</span>' +
+        '<span class="chip">资料总数 <b>' + s.excerpts + '</b></span>' +
+        '<span class="chip">未读 <b>' + s.unread + '</b></span>' +
+        '<span class="chip">已读 <b>' + s.read + '</b></span>' +
+        '<span class="chip">待复习 <b>' + s.review + '</b></span>' +
+        '<span class="chip">已掌握 <b>' + s.mastered + '</b></span>';
+      return true;
+    } catch (e) {
+      $('modeBadge').textContent = '后端不可用';
+      $('statusBar').innerHTML = '<span class="chip err">后端连接失败：' + esc(e.message) + '</span>';
+      return false;
+    }
+  }
+
+  async function refreshTags() {
+    try {
+      const { data } = await api('/excerpts');
+      var tags = {};
+      (data.data || data || []).forEach(function (e) {
+        (e.tags || '').split(',').forEach(function (t) { t = t.trim(); if (t) tags[t] = 1; });
+      });
+      var sel = $('fTag'), cur = sel.value;
+      sel.innerHTML = '<option value="">全部标签</option>' + Object.keys(tags).sort().map(function (t) {
+        return '<option value="' + esc(t) + '">' + esc(t) + '</option>';
+      }).join('');
+      sel.value = cur;
+    } catch (e) { /* 状态栏已提示 */ }
+  }
+
   function renderResults(rows, q) {
     lastResults = rows; lastQuery = q || '';
     if (q) {
       $('searchMsg').innerHTML = '<div class="okmsg">检索 “' + esc(q) + '” 命中 <b>' + rows.length +
-        '</b> 条（按相关度 = 正文分 + 2 × 标题分 排序）</div>';
+        '</b> 条（seekdb MATCH AGAINST 自然语言模式，按 正文分 + 2 × 标题分 排序）</div>';
     } else {
       $('searchMsg').innerHTML = '<div class="okmsg">未输入关键词，显示全部资料 ' + rows.length + ' 条（新记录在前）</div>';
     }
     $('searchResults').innerHTML = rows.length ? rows.map(function (r) {
       return '<div class="card"><h4>' + esc(r.title) + ' ' + badges(r) + '</h4>' +
         '<div class="meta">' +
-        (r.relevance_score !== undefined ? '<span class="score">相关度 ' + r.relevance_score.toFixed(4) + '</span>' : '') +
+        (r.relevance_score !== undefined ? '<span class="score">相关度 ' + Number(r.relevance_score).toFixed(4) + '</span>' : '') +
         (r.source_url ? '<span>来源 <a href="' + esc(r.source_url) + '" target="_blank" rel="noopener noreferrer">' + esc(r.source_url) + '</a></span>' : '') +
         (r.source_page ? '<span>页码 ' + esc(r.source_page) + '</span>' : '') +
         (r.tags ? '<span>标签 ' + esc(r.tags) + '</span>' : '') +
@@ -435,23 +245,47 @@
     }).join('') : '<div class="err">没有命中记录。试试“分布式数据库”“Paxos”或“full-text”，或先导入合成样例。</div>';
   }
 
-  function renderList() {
-    var rows = search('', {});
-    $('listResults').innerHTML = rows.length ? rows.map(function (r) {
-      return '<div class="card"><h4>#' + r.id + ' ' + esc(r.title) + ' ' + badges(r) + '</h4>' +
-        '<div class="meta">' +
-        (r.source_url ? '<span><a href="' + esc(r.source_url) + '" target="_blank" rel="noopener noreferrer">' + esc(r.source_url) + '</a></span>' : '') +
-        (r.tags ? '<span>标签 ' + esc(r.tags) + '</span>' : '') + '</div>' +
-        '<p class="body-text">' + esc(r.body_text) + '</p>' +
-        '<div class="review-row">' +
-        '<select data-review="' + r.id + '">' + Object.keys(STATE_LABEL).map(function (k) {
-          return '<option value="' + k + '"' + (k === r.state ? ' selected' : '') + '>' + STATE_LABEL[k] + '</option>';
-        }).join('') + '</select>' +
-        '<input type="text" data-notes="' + r.id + '" placeholder="复习备注" value="' + esc(r.review_notes) + '">' +
-        '<button type="button" class="small primary" data-save="' + r.id + '">保存状态</button>' +
-        '<button type="button" class="small danger" data-del="' + r.id + '">删除</button>' +
-        '</div></div>';
-    }).join('') : '<div class="err">暂无资料。请先在上方点击“导入 10 条合成教学样例”，或在“录入资料”标签页新增。</div>';
+  async function doSearch() {
+    var q = $('q').value.trim();
+    var params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if ($('fTag').value) params.set('tag', $('fTag').value);
+    if ($('fState').value) params.set('state', $('fState').value);
+    try {
+      if (q) {
+        const { data } = await api('/search?' + params.toString());
+        renderResults(data.data || [], q);
+      } else {
+        const { data } = await api('/excerpts?' + params.toString());
+        renderResults(data.data || data || [], '');
+      }
+    } catch (e) {
+      $('searchMsg').innerHTML = '<div class="err">检索失败：' + esc(e.message) + '</div>';
+    }
+  }
+
+  async function renderList() {
+    try {
+      const { data } = await api('/excerpts');
+      var rows = data.data || data || [];
+      $('listResults').innerHTML = rows.length ? rows.map(function (r) {
+        return '<div class="card"><h4>#' + r.id + ' ' + esc(r.title) + ' ' + badges(r) + '</h4>' +
+          '<div class="meta">' +
+          (r.source_url ? '<span><a href="' + esc(r.source_url) + '" target="_blank" rel="noopener noreferrer">' + esc(r.source_url) + '</a></span>' : '') +
+          (r.tags ? '<span>标签 ' + esc(r.tags) + '</span>' : '') + '</div>' +
+          '<p class="body-text">' + esc(r.body_text) + '</p>' +
+          '<div class="review-row">' +
+          '<select data-review="' + r.id + '">' + Object.keys(STATE_LABEL).map(function (k) {
+            return '<option value="' + k + '"' + (k === r.state ? ' selected' : '') + '>' + STATE_LABEL[k] + '</option>';
+          }).join('') + '</select>' +
+          '<input type="text" data-notes="' + r.id + '" placeholder="复习备注" value="' + esc(r.review_notes) + '">' +
+          '<button type="button" class="small primary" data-save="' + r.id + '">保存状态</button>' +
+          '<button type="button" class="small danger" data-del="' + r.id + '">删除</button>' +
+          '</div></div>';
+      }).join('') : '<div class="err">暂无资料。请先点击“导入 10 条合成教学样例”，或在“录入资料”标签页新增。</div>';
+    } catch (e) {
+      $('listResults').innerHTML = '<div class="err">加载失败：' + esc(e.message) + '</div>';
+    }
   }
 
   function switchTab(name) {
@@ -466,95 +300,99 @@
   $('tab-list').addEventListener('click', function () { switchTab('list'); });
   $('tab-create').addEventListener('click', function () { switchTab('create'); });
 
-  $('btnImport').addEventListener('click', function () {
-    try { localStorage.removeItem('evidencedesk_demo_cleared'); } catch (e) { /* 忽略 */ }
-    var added = importSample();
-    renderStatus();
-    renderResults(search(lastQuery, { tag: $('fTag').value || null, state: $('fState').value || null }), lastQuery);
-    $('searchMsg').innerHTML = '<div class="okmsg">已导入 ' + added + ' 条合成教学样例（example.com 为占位来源）。</div>';
+  $('btnImport').addEventListener('click', async function () {
+    this.disabled = true;
+    try {
+      const { data } = await api('/import-sample', { method: 'POST' });
+      $('searchMsg').innerHTML = '<div class="okmsg">已导入 ' + data.added + ' 条合成教学样例（数据库现存 ' + data.total + ' 条）。</div>';
+      await refreshStatus(); await refreshTags(); await doSearch();
+    } catch (e) {
+      $('searchMsg').innerHTML = '<div class="err">导入失败：' + esc(e.message) + '</div>';
+    } finally { this.disabled = false; }
   });
 
-  $('btnReset').addEventListener('click', function () {
-    store = { seq: 1, excerpts: [], reviews: {} };
-    try { localStorage.setItem('evidencedesk_demo_cleared', '1'); } catch (e) { /* 忽略 */ }
-    saveStore();
-    renderStatus();
-    renderResults([], '');
-    $('searchMsg').innerHTML = '<div class="okmsg">演示数据已清空。</div>';
+  $('btnReset').addEventListener('click', async function () {
+    if (!confirm('清空数据库中的全部演示资料？')) return;
+    this.disabled = true;
+    try {
+      const { data } = await api('/excerpts');
+      const rows = data.data || data || [];
+      for (const r of rows) await api('/excerpts/' + r.id, { method: 'DELETE' });
+      await refreshStatus(); await refreshTags(); renderResults([], '');
+      $('searchMsg').innerHTML = '<div class="okmsg">演示数据已清空。</div>';
+    } catch (e) {
+      $('searchMsg').innerHTML = '<div class="err">清空失败：' + esc(e.message) + '</div>';
+    } finally { this.disabled = false; }
   });
 
-  function doSearch() {
-    var q = $('q').value.trim();
-    var rows = search(q, { tag: $('fTag').value || null, state: $('fState').value || null });
-    renderResults(rows, q);
-  }
   $('btnSearch').addEventListener('click', doSearch);
   $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') doSearch(); });
 
-  $('btnExport').addEventListener('click', function () {
-    var md = buildMarkdown(lastResults, lastQuery);
-    var blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'evidence-' + Date.now() + '.md';
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
-  });
-
-  $('btnCreate').addEventListener('click', function () {
-    var res = createExcerpt({
-      title: $('cTitle').value, source_url: $('cUrl').value, source_page: $('cPage').value,
-      body_text: $('cBody').value, tags: $('cTags').value
-    });
-    if (res.error) {
-      $('createMsg').innerHTML = '<div class="err">' + esc(res.error) + '</div>';
-      return;
+  $('btnExport').addEventListener('click', async function () {
+    try {
+      var params = new URLSearchParams();
+      if (lastQuery) params.set('q', lastQuery);
+      const { blob } = await api('/export?' + params.toString());
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'evidence-' + Date.now() + '.md';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+    } catch (e) {
+      $('searchMsg').innerHTML = '<div class="err">导出失败：' + esc(e.message) + '</div>';
     }
-    $('createMsg').innerHTML = '<div class="okmsg">已保存，资料 ID = ' + res.id + '，默认为“未读”。</div>';
-    $('cTitle').value = $('cUrl').value = $('cPage').value = $('cBody').value = $('cTags').value = '';
-    renderStatus();
   });
 
-  $('listResults').addEventListener('click', function (e) {
+  $('btnCreate').addEventListener('click', async function () {
+    this.disabled = true;
+    try {
+      const { data } = await api('/excerpts', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: $('cTitle').value, source_url: $('cUrl').value || null, source_page: $('cPage').value || null,
+          body_text: $('cBody').value, tags: $('cTags').value || null
+        })
+      });
+      $('createMsg').innerHTML = '<div class="okmsg">已保存到 seekdb，资料 ID = ' + data.id + '，默认为“未读”。</div>';
+      $('cTitle').value = $('cUrl').value = $('cPage').value = $('cBody').value = $('cTags').value = '';
+      await refreshStatus(); await refreshTags();
+    } catch (e) {
+      $('createMsg').innerHTML = '<div class="err">' + esc(e.message) + '</div>';
+    } finally { this.disabled = false; }
+  });
+
+  $('listResults').addEventListener('click', async function (e) {
     var t = e.target;
     if (t.dataset && t.dataset.save) {
-      var id = Number(t.dataset.save);
+      var id = t.dataset.save;
       var sel = document.querySelector('select[data-review="' + id + '"]');
       var notes = document.querySelector('input[data-notes="' + id + '"]');
-      var r = updateReviewState(id, sel.value, notes.value);
-      if (r.error) { alert(r.error); return; }
-      renderStatus(); renderList();
+      try {
+        await api('/excerpts/' + id + '/review', { method: 'PUT', body: JSON.stringify({ state: sel.value, notes: notes.value }) });
+        await refreshStatus(); await renderList();
+      } catch (err) { alert(err.message); }
     }
     if (t.dataset && t.dataset.del) {
       if (confirm('删除资料 #' + t.dataset.del + '？')) {
-        deleteExcerpt(Number(t.dataset.del));
-        renderStatus(); renderList();
+        try {
+          await api('/excerpts/' + t.dataset.del, { method: 'DELETE' });
+          await refreshStatus(); await refreshTags(); await renderList();
+        } catch (err) { alert(err.message); }
       }
     }
   });
 
-  window.EvidenceDeskDemo = {
-    search: search, createExcerpt: createExcerpt, updateReviewState: updateReviewState,
-    deleteExcerpt: deleteExcerpt, importSample: importSample, getStats: getStats,
-    buildMarkdown: buildMarkdown, reset: function () { store = { seq: 1, excerpts: [], reviews: {} }; saveStore(); renderStatus(); }
-  };
+  window.EvidenceDeskDemo = { api: api, doSearch: doSearch, refreshStatus: refreshStatus };
 
-  var autoSeeded = false;
-  if (store.excerpts.length === 0) {
-    var clearedFlag = false;
-    try { clearedFlag = localStorage.getItem('evidencedesk_demo_cleared') === '1'; } catch (e) { /* 忽略 */ }
-    if (!clearedFlag) {
-      importSample();
-      autoSeeded = true;
+  (async function init() {
+    const ok = await refreshStatus();
+    await refreshTags();
+    if (ok) {
+      const { data } = await api('/excerpts').catch(() => ({ data: { data: [] } }));
+      renderResults(data.data || data || [], '');
     }
-  }
-
-  renderStatus();
-  renderResults(search('', {}), '');
-  if (autoSeeded) {
-    $('searchMsg').innerHTML = '<div class="okmsg">已预载 10 条合成教学样例（演示数据，仅存于本浏览器），可直接检索；也可清空或重新导入。</div>';
-  }
+  })();
 })();
 </script>
 </body>
