@@ -34,6 +34,17 @@
 
 此前队员通过 MiniMax 网页端（`https://agent.minimax.cn/`，M3.1-Flash）进行过一次探路请求和一次正式请求，请求中给出了完整实现描述。记录保留于 `evidence/minimax-request.txt`、`evidence/minimax-response.py`、`evidence/final-change.diff`、`evidence/local-task_service.py`，以说明真实过程。
 
-## 四、缺口说明
+## 四、平台原始记录与缺口说明
 
-本轮修改发生在 WorkBuddy 会话内，**没有平台导出的会话文件**。可核对的实物证据是 `evidence/workbuddy-minimax/` 中的上下文输入文件（含 SHA-256）、模型产出的代码、统一差异、修改前后测试日志与退出码，以及 PowerContext 的写入与跨服务重启读回记录；会话原文以 WorkBuddy 的会话记录为准。本轮未额外调用付费 MiniMax API。
+本轮修改发生在 WorkBuddy 会话内。WorkBuddy **自己生成**的改动日志已逐字导出到 `evidence/workbuddy-minimax/platform-record/`：
+
+- `session.json`：WorkBuddy 本地数据库 `sessions` / `session_usage` 表原行，记录本会话的模型 ID 为 **`minimax-m3.1-flash`**、工作目录、创建时间与上下文用量。
+- `changes-<requestId>.json`：平台变更日志原文件，记录本轮每次模型请求驱动下写过的每一个文件及其 unified-diff hunks，其中 `task_service.py` 的 hunk 逐行保存了本轮 MiniMax 写出的代码。
+
+由该 hunk 重建的文件 SHA-256 为 `fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4`，与提交的 `sample/after/task_service.py` 逐字节一致。评审可自行复核：
+
+```bash
+python verify_platform_record.py     # 只依赖交付目录内的文件
+```
+
+**缺口**：平台改动日志记录的是文件改动（含逐行 diff），不是模型的消息原文；WorkBuddy 未提供整段会话的导出功能，因此没有"平台导出的完整对话文件"。模型私有思维链不提交。本轮未额外调用付费 MiniMax API。

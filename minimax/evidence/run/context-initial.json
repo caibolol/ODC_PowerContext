@@ -1,5 +1,5 @@
 {
-  "project": "taskboard-92c2f8b4b0ce",
+  "project": "taskboard-0d90a7cd0008",
   "task": "TASK-2",
   "spec_entries": [
     {
@@ -89,7 +89,7 @@
   "query": {
     "sql": "SELECT path,kind,tasks,content,sha256 FROM sdd_sources WHERE project_id=%s ORDER BY kind,path",
     "parameters": [
-      "taskboard-92c2f8b4b0ce"
+      "taskboard-0d90a7cd0008"
     ],
     "database_rows": 3,
     "selected_rows": 3,
@@ -97,14 +97,14 @@
       {
         "sql": "SELECT path,kind,tasks,content,sha256 FROM sdd_sources WHERE project_id=%s ORDER BY kind,path",
         "parameters": [
-          "taskboard-92c2f8b4b0ce"
+          "taskboard-0d90a7cd0008"
         ],
         "rows": 3
       },
       {
         "sql": "SELECT path,entry_id,title,body,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id=%s AND path IN (%s,%s,%s)",
         "parameters": [
-          "taskboard-92c2f8b4b0ce",
+          "taskboard-0d90a7cd0008",
           "spec",
           "TASK-2",
           "before/task_service.py",
@@ -116,7 +116,7 @@
       {
         "sql": "SELECT path,entry_id,title,body,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id<>%s AND path IN (%s) ORDER BY path,line_start",
         "parameters": [
-          "taskboard-92c2f8b4b0ce",
+          "taskboard-0d90a7cd0008",
           "spec",
           "TASK-2",
           "spec.md"
@@ -126,7 +126,7 @@
       {
         "sql": "SELECT path,entry_id,title,line_start,line_end FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id IN (%s) AND path IN (%s,%s,%s) ORDER BY path,line_start",
         "parameters": [
-          "taskboard-92c2f8b4b0ce",
+          "taskboard-0d90a7cd0008",
           "code",
           "list_tasks",
           "before/task_service.py",
@@ -138,7 +138,7 @@
       {
         "sql": "SELECT path,entry_id,title,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND path IN (%s,%s,%s) ORDER BY path,line_start",
         "parameters": [
-          "taskboard-92c2f8b4b0ce",
+          "taskboard-0d90a7cd0008",
           "test",
           "before/task_service.py",
           "spec.md",

@@ -87,6 +87,37 @@ python -B -m unittest -v test_task_service.RegressionTests
 
 PowerContext 状态落在 `$POWERCONTEXT_HOME/powercontext.db`（SQLite）。因此上表最后一行是**跨服务进程重启**的复用，不是在同一进程内读内存变量，也没有把先前导出的状态文件当作读回结果。
 
+## 平台原始记录（WorkBuddy 自己写下的改动日志）
+
+`platform-record/` 下是 WorkBuddy 平台**自己生成**的记录，逐字导出，未做任何改写：
+
+| 文件 | 来源 | 内容 |
+| --- | --- | --- |
+| `session.json` | WorkBuddy 本地数据库 `workbuddy.db` 的 `sessions` / `session_usage` 表原行（只读导出） | 本会话的 `id`、`cwd`、`model`（`minimax-m3.1-flash`）、创建/更新时间、上下文用量 |
+| `changes-<requestId>.json` | WorkBuddy 平台变更日志 `changes-detail/<会话 id>/` 原文件 | 每次模型请求驱动下平台记录的文件改动，逐个文件给出 action、增删行数与 unified-diff hunks |
+| `verify-output.txt` | 本目录下 `verify_platform_record.py` 的实际输出 | 校验结论 |
+
+其中 `changes-*.json` 记录了本会话写过的每一个文件，含业务代码：
+
+```
+modify   +13   -2    ...\minimax\.runtime\wb-work\task_service.py
+modify   +1    -1    ...\minimax\requirements-windows-lock.txt
+modify   +111  -0    ...\minimax\evidence\workbuddy-minimax\README.md
+modify   +30   -8    ...\minimax\DEVELOPMENT.md
+modify   +31   -13   ...\minimax\ACCEPTANCE.md
+modify   +13   -1    ...\minimax\README.md
+modify   +9    -1    ...\minimax\TECHNICAL.md
+modify   +12   -3    ...\.workbuddy\memory\MEMORY.md
+```
+
+`task_service.py` 的 hunk 里逐行保存了本轮写出的代码。据此重建出的文件 SHA-256 为 `fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4`，与提交的 `sample/after/task_service.py` **逐字节一致**——这把"本轮 MiniMax 写出的代码"与"提交的代码差异"直接对应起来。
+
+评审可自行复核（只依赖本目录文件，不需要数据库、网络或本机 WorkBuddy 安装）：
+
+```bash
+python verify_platform_record.py
+```
+
 ## 与更早的 MiniMax API 记录的关系
 
 `evidence/minimax-api/20261028T010349Z-exchange.json` 是更早一次**独立 MiniMax API 调用**（端点 `https://api.minimaxi.com/v1/chat/completions`，模型 `MiniMax-M3`，2 轮，含每轮完整请求、原始回复与测试结果）的真实记录，其产出的代码已另存为 `evidence/minimax-api/20261028T010349Z-task_service.py`（SHA-256 `8b9c31f7af6e8d3b0bfb634f9d1ae9ad9c6c7189d4b02e69ed9693f6ca6fe4f0`）。
@@ -107,5 +138,6 @@ PowerContext 状态落在 `$POWERCONTEXT_HOME/powercontext.db`（SQLite）。因
 
 ## 已知缺口
 
-- 本轮修改发生在 WorkBuddy 会话内，**没有平台导出的会话文件**。可核对的实物证据是本目录中的：上下文输入文件（含 SHA-256）、模型产出的代码文件、统一差异、以及修改前后的测试日志与退出码；会话原文以 WorkBuddy 的会话记录为准。
+- 平台变更日志记录的是**文件改动**（含逐行 diff），不是模型的消息原文；模型私有思维链不提交，也不应提交。WorkBuddy 没有提供整段会话的导出功能，因此**没有**"平台导出的完整对话文件"。
+- 本轮修改发生在 WorkBuddy 会话内。可核对的实物证据是：本目录的上下文输入文件（含 SHA-256）、模型产出的代码、统一差异、修改前后测试日志与退出码、PowerContext 写入与跨服务重启读回记录，以及 `platform-record/` 中 WorkBuddy 自己生成的会话元数据（模型 ID `minimax-m3.1-flash`）与改动日志（含业务代码的逐行 hunk）。
 - 本轮未额外调用付费 MiniMax API（WorkBuddy 中的 MiniMax 已实际承担代码修改）。

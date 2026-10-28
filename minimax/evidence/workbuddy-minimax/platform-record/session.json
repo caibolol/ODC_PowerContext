@@ -1,0 +1,29 @@
+{
+  "id": "ffade525-acba-4563-8b77-6c97fd6683b8",
+  "cwd": "E:/OceanBase2026",
+  "title": "开始会话主题",
+  "status": "working",
+  "created_at": 1793198621266,
+  "updated_at": 1793203181409,
+  "source_mode": "craft",
+  "mode": "craft",
+  "model": "minimax-m3.1-flash",
+  "last_activity_at": 1793202825279,
+  "context_window": 1000000,
+  "thought_level": "max",
+  "transport": "local",
+  "conversation_origin": null,
+  "visibility": null,
+  "session_usage": {
+    "session_id": "ffade525-acba-4563-8b77-6c97fd6683b8",
+    "used": 202697,
+    "size": 1000000,
+    "updated_at": 1793203184941,
+    "credit_json": "{\"01a182f782867076aeed4c91a1915ce9\":40.31,\"01a18337a7f8780d9d5248fdd9c6f875\":21.509999999999994}"
+  },
+  "_source": "WorkBuddy 本地平台数据库 C:/Users/zxy/.workbuddy/workbuddy.db 的 sessions / session_usage 表原行（只读导出）",
+  "_exported_request_ids": [
+    "01a182f782867076aeed4c91a1915ce9",
+    "01a18337a7f8780d9d5248fdd9c6f875"
+  ]
+}

@@ -18,6 +18,7 @@
 | `python context.py save --scope S --state F` | 任务状态 JSON（`task`、`completed`、`todo`、`tests`） | PowerContext 写入结果 |
 | `python minimax_agent.py --project P --task T --scope S --output F` | 同上，加输出文件 | MiniMax 修改后的文件；`evidence/minimax-api/<时间>-exchange.json` 与 `-change.diff` |
 | `python run_demo.py [--recorded]` | 无 | 完整验证样例；`evidence/run/` 下的步骤日志与上下文 |
+| `python verify_platform_record.py` | 无 | 由 WorkBuddy 平台改动日志重建本轮 MiniMax 写出的业务代码，并与 `sample/after/task_service.py` 比对（只依赖交付目录内的文件） |
 
 上下文选择方式：规格按 `## <编号> <标题>` 切分为条目；任务编号对应的条目为 implement，同一规格中的其他条目为 preserve（必须保持的原有行为）；implement 条目中以 `` `name(` `` 引用的函数，在代码符号索引中查到需要修改的文件与行号；调用这些函数的测试用例按测试类分为功能测试与回归测试。规格修改后重新 `ingest`，同一编号的条目随之更新，不返回固定答案。
 
@@ -79,7 +80,7 @@ seekdb 启动需要约 1 分钟，`run_demo.py` 第一步连接失败时稍候�
 | 路径 | 内容 |
 | --- | --- |
 | `evidence/run/` | `run_demo.py --recorded` 的完整步骤日志与上下文输出（本机干净环境运行）；`pip-freeze.txt` 为实际依赖，`seekdb-build.txt` 为实际使用的 seekdb 版本与启动参数 |
-| `evidence/workbuddy-minimax/` | 本轮由 WorkBuddy 中运行的 MiniMax（M3.1 Flash）产出最终业务代码的完整开发记录：送入的上下文、产出的代码、统一差异、修改前后测试日志、PowerContext 写入与跨服务重启读回 |
+| `evidence/workbuddy-minimax/` | 本轮由 WorkBuddy 中运行的 MiniMax（M3.1 Flash）产出最终业务代码的完整开发记录：送入的上下文、产出的代码、统一差异、修改前后测试日志、PowerContext 写入与跨服务重启读回；`platform-record/` 为 WorkBuddy 平台自己生成的会话元数据（模型 ID `minimax-m3.1-flash`）与改动日志 |
 | `evidence/minimax-api/` | 更早一次独立 MiniMax API 调用（模型 `MiniMax-M3`）的真实交互记录与产出代码 |
 | `evidence/linux-ci/` | 更早一次 Ubuntu 24.04 + seekdb 官方镜像的干净环境运行证据 |
 | `evidence/clean-environment/` | 队员在另一台干净 Windows 机器上的独立复验记录 |
@@ -90,7 +91,7 @@ seekdb 启动需要约 1 分钟，`run_demo.py` 第一步连接失败时稍候�
 - 规格条目以二级标题编号识别，代码符号与测试用例解析面向 Python。
 - 单个项目的导入应串行执行；连接用户需要建库建表权限。
 - MiniMax 每次生成的代码不必完全相同；仓库保存的是本次实际采用的输出与完整交互记录。
-- 本轮 MiniMax 修改发生在 WorkBuddy 会话内，没有平台导出的会话文件；可核对的是 `evidence/workbuddy-minimax/` 中的上下文输入、产出代码、差异与测试日志。
+- 本轮 MiniMax 修改发生在 WorkBuddy 会话内。WorkBuddy 没有整段会话的导出功能，因此没有"平台导出的完整对话文件"；但平台自己生成的改动日志（`evidence/workbuddy-minimax/platform-record/`）逐行保存了本轮写出的业务代码，`python verify_platform_record.py` 可复核其与提交文件逐字节一致。
 
 技术说明见 [TECHNICAL.md](TECHNICAL.md)，开发记录见 [DEVELOPMENT.md](DEVELOPMENT.md)，验收项与证据对照见 [ACCEPTANCE.md](ACCEPTANCE.md)。
 依赖来源：[PowerContext](https://github.com/oceanbase/powercontext)、[seekdb](https://github.com/oceanbase/seekdb)、[PyMySQL](https://github.com/PyMySQL/PyMySQL)；样例业务代码为本次编写。
