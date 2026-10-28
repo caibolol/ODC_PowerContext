@@ -1,0 +1,24 @@
+{
+  "memory": {
+    "family": "memory",
+    "artifact_id": "memory",
+    "revision": 2
+  },
+  "entry": {
+    "citation": {
+      "memory_ref": {
+        "family": "memory",
+        "artifact_id": "memory",
+        "revision": 2
+      },
+      "entry_id": "mem_ent_1ffdf60cb8414a6faa443af9b71258e1",
+      "entry_version_id": "mem_ver_00ff8ff6353444c09f00f464adf424f4"
+    },
+    "version": 1,
+    "kind": "task-progress",
+    "text": "{\"task\": \"TASK-2\", \"completed\": [\"导入规格、代码与测试到 seekdb\", \"由 WorkBuddy 中的 MiniMax（M3.1 Flash）依据上下文完成 list_tasks 状态筛选实现\", \"功能测试 5 项与回归测试 2 项全部通过\"], \"todo\": [], \"tests\": [{\"stage\": \"before\", \"target_exit\": 1, \"regression_exit\": 0, \"reason\": \"目标行为未实现，5 项功能测试断言失败\", \"code_sha256\": \"e233a73b2736188e2fe9a8790ca9533a09a4d9dc9ec86110ee17e762a7ded978\"}, {\"stage\": \"after\", \"target_exit\": 0, \"regression_exit\": 0, \"code_sha256\": \"fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4\", \"tests_sha256\": \"2c01d2de7e49987f1ead4e38a0916f4a7f3bae40dcfcf701d24a171435f899a7\"}], \"saved_at\": 1793199124423567100}",
+    "state": "active",
+    "source_refs": [],
+    "artifact_refs": []
+  }
+}

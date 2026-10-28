@@ -47,7 +47,7 @@ seekdb 启动需要约 1 分钟，`run_demo.py` 第一步连接失败时稍候�
 
 ### Windows
 
-按 `start-seekdb.ps1`（原生 seekdb 二进制）与 `start-powercontext.ps1` 启动服务，连接变量默认 `DB_PORT=18753`、`PC_URL=http://127.0.0.1:18752`，其余命令相同（激活脚本为 `.venv/Scripts/Activate.ps1`）。`requirements-windows-lock.txt` 为 Windows/Python 3.12 完整依赖锁定。
+按 `start-seekdb.ps1`（原生 seekdb 二进制）与 `start-powercontext.ps1` 启动服务，连接变量默认 `DB_PORT=18753`、`PC_URL=http://127.0.0.1:18752`，其余命令相同（激活脚本为 `.venv/Scripts/Activate.ps1`）。`requirements-windows-lock.txt` 为 Windows/Python 3.12 完整依赖锁定，其中 PowerContext 同样固定在官方公开仓库的提交 `dab240063bfcfa7917898dc44da4baadb3747bd0`，评审在干净环境无需任何私有凭据。
 
 `start-seekdb.ps1` 的 `-SeekdbExe` 是必填参数，需指向 `seekdb.exe`（可用 `-Port` 改端口，默认 18753）：
 
@@ -74,11 +74,23 @@ seekdb 启动需要约 1 分钟，`run_demo.py` 第一步连接失败时稍候�
 
 原有脚本 `verify_sample.py`（修改前后快照、同一测试文件）与 `verify_context.py`（导入、规格更新、状态复用）仍可单独运行。
 
+## 证据目录
+
+| 路径 | 内容 |
+| --- | --- |
+| `evidence/run/` | `run_demo.py --recorded` 的完整步骤日志与上下文输出（本机干净环境运行）；`pip-freeze.txt` 为实际依赖，`seekdb-build.txt` 为实际使用的 seekdb 版本与启动参数 |
+| `evidence/workbuddy-minimax/` | 本轮由 WorkBuddy 中运行的 MiniMax（M3.1 Flash）产出最终业务代码的完整开发记录：送入的上下文、产出的代码、统一差异、修改前后测试日志、PowerContext 写入与跨服务重启读回 |
+| `evidence/minimax-api/` | 更早一次独立 MiniMax API 调用（模型 `MiniMax-M3`）的真实交互记录与产出代码 |
+| `evidence/linux-ci/` | 更早一次 Ubuntu 24.04 + seekdb 官方镜像的干净环境运行证据 |
+| `evidence/clean-environment/` | 队员在另一台干净 Windows 机器上的独立复验记录 |
+| `evidence/minimax-request.txt`、`evidence/minimax-response.py`、`evidence/final-change.diff`、`evidence/local-task_service.py` | 最早的 MiniMax 网页端会话记录 |
+
 ## 已知限制
 
 - 规格条目以二级标题编号识别，代码符号与测试用例解析面向 Python。
 - 单个项目的导入应串行执行；连接用户需要建库建表权限。
 - MiniMax 每次生成的代码不必完全相同；仓库保存的是本次实际采用的输出与完整交互记录。
+- 本轮 MiniMax 修改发生在 WorkBuddy 会话内，没有平台导出的会话文件；可核对的是 `evidence/workbuddy-minimax/` 中的上下文输入、产出代码、差异与测试日志。
 
 技术说明见 [TECHNICAL.md](TECHNICAL.md)，开发记录见 [DEVELOPMENT.md](DEVELOPMENT.md)，验收项与证据对照见 [ACCEPTANCE.md](ACCEPTANCE.md)。
 依赖来源：[PowerContext](https://github.com/oceanbase/powercontext)、[seekdb](https://github.com/oceanbase/seekdb)、[PyMySQL](https://github.com/PyMySQL/PyMySQL)；样例业务代码为本次编写。

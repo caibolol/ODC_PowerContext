@@ -11,12 +11,12 @@
         "artifact_id": "memory",
         "revision": 1
       },
-      "entry_id": "mem_ent_2f1ce7aec8b5411d8dabf679592013b4",
-      "entry_version_id": "mem_ver_9ffdb03de7ec4f209ddcc1ca87fa93cb"
+      "entry_id": "mem_ent_9b9e5ec56e0b4079853d4f51341a6461",
+      "entry_version_id": "mem_ver_8111f86ccfbc4812895b4839754ac2f1"
     },
     "version": 1,
     "kind": "task-progress",
-    "text": "{\"task\": \"TASK-2\", \"completed\": [\"已完成本地实现\", \"7项测试通过\", \"规格更新检索验证通过\", \"已采用MiniMax正式回复的业务代码并通过相同7项测试\"], \"todo\": [\"提交固定版本后等待平台评审\"], \"tests\": [{\"stage\": \"before\", \"exit_code\": 1, \"code_sha256\": \"0253b9f71074bdaec7d0967b19c98ecd1b39c2e2746fc793dc222fa5abe8e270\", \"tests_sha256\": \"d9dad3c12344d83ac7dbac32d7a200fb593f3f1e33b3c5c7b58229b137429190\"}, {\"stage\": \"after\", \"exit_code\": 0, \"code_sha256\": \"74912e5ccbe725300796f718bfef8f6891c8901d1d5bdffa87cf0691f62a99bc\", \"tests_sha256\": \"d9dad3c12344d83ac7dbac32d7a200fb593f3f1e33b3c5c7b58229b137429190\"}]}",
+    "text": "{\"task\": \"TASK-2\", \"completed\": [\"已完成本地实现\", \"7项测试通过\", \"规格更新检索验证通过\", \"已采用MiniMax正式回复的业务代码并通过相同7项测试\"], \"todo\": [\"提交固定版本后等待平台评审\"], \"tests\": [{\"stage\": \"before\", \"exit_code\": 1, \"code_sha256\": \"e233a73b2736188e2fe9a8790ca9533a09a4d9dc9ec86110ee17e762a7ded978\", \"tests_sha256\": \"2c01d2de7e49987f1ead4e38a0916f4a7f3bae40dcfcf701d24a171435f899a7\"}, {\"stage\": \"after\", \"exit_code\": 0, \"code_sha256\": \"fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4\", \"tests_sha256\": \"2c01d2de7e49987f1ead4e38a0916f4a7f3bae40dcfcf701d24a171435f899a7\"}], \"saved_at\": 1793199366267747800}",
     "state": "active",
     "source_refs": [],
     "artifact_refs": []

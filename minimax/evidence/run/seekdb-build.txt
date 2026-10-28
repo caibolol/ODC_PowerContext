@@ -1,0 +1,6 @@
+seekdb 本机二进制（非 Docker 镜像）
+服务端版本: 5.7.25-OceanBase seekdb-v1.4.0.0
+二进制: seekdb/build_release/src/observer/seekdb.exe (seekdb-v1.4.0.0, revision 1-ed9f4c3d6cc97a79d721698f7ceeadb157d9401e)
+启动参数: --nodaemon --base-dir <dir> --port 18753 --parameter memory_limit=4G --parameter log_disk_size=2G --parameter datafile_size=2G
+连接方式: MySQL 协议 127.0.0.1:18753 user=root（空密码）
+Python: 3.12.2 on Windows-11-10.0.26200-SP0

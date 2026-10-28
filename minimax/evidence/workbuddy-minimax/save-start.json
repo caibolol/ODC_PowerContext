@@ -1,0 +1,24 @@
+{
+  "memory": {
+    "family": "memory",
+    "artifact_id": "memory",
+    "revision": 1
+  },
+  "entry": {
+    "citation": {
+      "memory_ref": {
+        "family": "memory",
+        "artifact_id": "memory",
+        "revision": 1
+      },
+      "entry_id": "mem_ent_c76257be96d24d8cbc4e8921c43b2b61",
+      "entry_version_id": "mem_ver_900e8d5590bd42408f1312aa53599ecf"
+    },
+    "version": 1,
+    "kind": "task-progress",
+    "text": "{\"task\": \"TASK-2\", \"completed\": [\"导入规格、代码与测试到 seekdb\"], \"todo\": [\"由 MiniMax 依据上下文修改代码\", \"运行功能与回归测试\"], \"tests\": [], \"saved_at\": 1793199039847312700}",
+    "state": "active",
+    "source_refs": [],
+    "artifact_refs": []
+  }
+}

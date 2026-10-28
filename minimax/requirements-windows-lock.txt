@@ -64,7 +64,7 @@ packaging==26.3
 pathable==0.6.0
 pfzy==0.3.4
 platformdirs==4.13.6
-powercontext @ git+https://github.com/caibolol/ODC_PowerContext.git@da0cb9c2e945d6363725b3abfc4f40a854bf9d29
+powercontext @ git+https://github.com/oceanbase/powercontext.git@dab240063bfcfa7917898dc44da4baadb3747bd0
 prometheus-client==0.26.0
 prompt-toolkit==3.0.53
 py-key-value-aio==0.4.6

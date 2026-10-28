@@ -7,7 +7,8 @@ context.py         上下文模块 CLI：ingest / scope / context / save
 minimax_agent.py   MiniMax 开发助手接入：上下文 → MiniMax → 代码文件 → 测试 → 失败时再交回 MiniMax
 run_demo.py        验证样例编排：每步独立进程，记录命令、退出码、输出与代码版本
 sample/            业务工程：spec.md、manifest.json、before/（修改前）、after/（MiniMax 输出）、test_task_service.py
-evidence/          运行与开发证据
+evidence/          运行与开发证据（run/ 本次干净环境运行，workbuddy-minimax/ 本轮 MiniMax 开发记录，
+                   minimax-api/ 独立 API 调用记录，linux-ci/ 与 clean-environment/ 更早的干净环境证据）
 ```
 
 ## 数据与上下文选择
@@ -27,6 +28,13 @@ seekdb 两张表：
 | 构造上下文 | 查询规格条目、代码符号、测试用例 | 读回最新任务进展 | |
 | 代码修改 | | | 依据上下文生成完整文件；测试失败时依据失败输出修正 |
 | 验证与交接 | | 保存“已完成 / 待办 / 验证结果”，重启后读回 | |
+
+MiniMax 有两条接入路径，产出行为一致：
+
+- `minimax_agent.py`：上下文 → MiniMax Chat Completions（OpenAI 兼容）→ 写入返回的代码 → 跑测试，失败则把输出交回 MiniMax 继续修改（HTTP API，需要 `MINIMAX_API_KEY`）。
+- 本轮采用：WorkBuddy 宿主中运行的 MiniMax 直接读入 `context.py context` 的输出文件，据此写出完整文件后跑同一组测试（不需要额外凭据）。
+
+两条路径都只使用 `context.py` 给出的上下文，提示中不含任何参考实现。
 
 ## 状态复用
 
