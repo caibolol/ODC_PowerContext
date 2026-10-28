@@ -23,7 +23,9 @@
 
 ## 依赖与环境
 
-已验证：Ubuntu 24.04（GitHub Actions）与 Windows；Python 3.12；PyMySQL 1.2.0；seekdb 官方镜像 `oceanbase/seekdb:latest`（本次 digest `sha256:4db4961869d554313520d6081fca29265ba6da6db7313311bd8acbed771a956b`）；PowerContext 源码提交 `da0cb9c2e945d6363725b3abfc4f40a854bf9d29`（HTTP API）；MiniMax OpenAI 兼容 Chat Completions，模型 `MiniMax-M3`。
+已验证：Ubuntu 24.04（GitHub Actions）与 Windows；Python 3.12；PyMySQL 1.2.0；seekdb 官方镜像 `oceanbase/seekdb:latest`（本次 digest `sha256:4db4961869d554313520d6081fca29265ba6da6db7313311bd8acbed771a956b`）；PowerContext 取自官方公开仓库 `https://github.com/oceanbase/powercontext.git` 分支 `2026-competition`，提交 `dab240063bfcfa7917898dc44da4baadb3747bd0`（HTTP API）；MiniMax OpenAI 兼容 Chat Completions，模型 `MiniMax-M3`。
+
+> PowerContext 从**官方公开仓库**安装，评审在干净环境无需任何私有凭据即可完成安装。
 
 ### Linux（推荐，与评审的干净环境一致）
 
@@ -31,7 +33,7 @@
 cd minimax
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
-pip install "powercontext[cli,server] @ git+https://github.com/caibolol/ODC_PowerContext.git@da0cb9c2e945d6363725b3abfc4f40a854bf9d29"
+pip install "powercontext[cli,server] @ git+https://github.com/oceanbase/powercontext.git@2026-competition"
 docker run -d --name seekdb -p 2881:2881 oceanbase/seekdb:latest
 export POWERCONTEXT_HOME=$(mktemp -d)        # 空的 PowerContext 状态
 powercontext server run --no-env-file --host 127.0.0.1 --port 18752 &
@@ -46,6 +48,14 @@ seekdb 启动需要约 1 分钟，`run_demo.py` 第一步连接失败时稍候�
 ### Windows
 
 按 `start-seekdb.ps1`（原生 seekdb 二进制）与 `start-powercontext.ps1` 启动服务，连接变量默认 `DB_PORT=18753`、`PC_URL=http://127.0.0.1:18752`，其余命令相同（激活脚本为 `.venv/Scripts/Activate.ps1`）。`requirements-windows-lock.txt` 为 Windows/Python 3.12 完整依赖锁定。
+
+`start-seekdb.ps1` 的 `-SeekdbExe` 是必填参数，需指向 `seekdb.exe`（可用 `-Port` 改端口，默认 18753）：
+
+```powershell
+.\start-seekdb.ps1 -SeekdbExe D:\path\to\seekdb.exe
+```
+
+未传该参数时 PowerShell 会报「强制参数缺失: SeekdbExe」。
 
 ## 验证样例
 
