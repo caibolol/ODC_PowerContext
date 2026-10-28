@@ -1,1488 +1,739 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>研读档案 EvidenceDesk · OceanBase 数据库大赛 Qoder 赛道</title>
-  <meta name="description" content="EvidenceDesk：帮助学生与研究者管理资料摘录，用真实 seekdb FULLTEXT IK 检索带来源的证据，并保存复习进度。84/84 集成测试通过，站点内置可运行的在线体验。">
-  <meta name="theme-color" content="#0b1220">
-  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-  <style>
-    :root {
-      --ink: #0f172a;
-      --ink-2: #1e293b;
-      --muted: #64748b;
-      --muted-2: #94a3b8;
-      --line: #e2e8f0;
-      --line-strong: #cbd5e1;
-      --paper: #f6f8fb;
-      --surface: #ffffff;
-      --teal: #0f766e;
-      --teal-bright: #14b8a6;
-      --blue: #2563eb;
-      --blue-soft: #dbeafe;
-      --amber: #d97706;
-      --amber-soft: #fef3c7;
-      --green: #15803d;
-      --green-soft: #dcfce7;
-      --red: #b91c1c;
-      --dark: #0b1220;
-      --dark-2: #111a2e;
-      --dark-line: rgba(148, 163, 184, 0.18);
-      --radius: 18px;
-      --radius-sm: 12px;
-      --shadow: 0 24px 60px rgba(15, 23, 42, 0.10);
-      --shadow-soft: 0 10px 30px rgba(15, 23, 42, 0.06);
-      --max: 1180px;
-      --font: "Inter", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
-      --mono: "SFMono-Regular", "Cascadia Code", "Consolas", "Liberation Mono", monospace;
-    }
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>页迹 PageTrail · 本地资料混合检索与复习助手</title>
+<meta name="description" content="页迹 PageTrail 把笔记、实验记录和论文卡片放进一个基于 seekdb 的本地索引：全文与向量混合检索、每条结果带出处、读完评分按间隔复习。一条命令即可验证。" />
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+<style>
+  :root {
+    --paper: #f6f1e6;
+    --paper-deep: #efe6d5;
+    --surface: #fffdf8;
+    --ink: #201b15;
+    --ink-soft: #4d4438;
+    --muted: #7a6c59;
+    --line: #e0d3bb;
+    --line-strong: #c9b899;
+    --accent: #a83f1b;
+    --accent-ink: #7d2c11;
+    --teal: #2c6a60;
+    --teal-soft: #e3efec;
+    --shadow: 0 1px 2px rgba(60, 44, 22, .06), 0 12px 32px -18px rgba(60, 44, 22, .35);
+    --radius: 14px;
+    --serif: "Noto Serif SC", "Songti SC", "Source Han Serif SC", "STSong", Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    --mono: "JetBrains Mono", "SFMono-Regular", ui-monospace, "Cascadia Code", Consolas, monospace;
+    --wrap: 1120px;
+  }
 
-    * { box-sizing: border-box; }
-    html { scroll-behavior: smooth; }
-    body {
-      margin: 0;
-      font-family: var(--font);
-      color: var(--ink);
-      background: var(--paper);
-      line-height: 1.7;
-      -webkit-font-smoothing: antialiased;
-      text-rendering: optimizeLegibility;
-    }
-    img { max-width: 100%; display: block; }
-    a { color: inherit; text-decoration: none; }
-    button { font: inherit; }
-    code, pre { font-family: var(--mono); }
-    ::selection { background: #99f6e4; color: #042f2e; }
+  * { box-sizing: border-box; }
 
-    .skip-link {
-      position: absolute;
-      left: 16px;
-      top: -80px;
-      z-index: 100;
-      background: var(--surface);
-      color: var(--ink);
-      padding: 10px 16px;
-      border-radius: 10px;
-      box-shadow: var(--shadow-soft);
-      transition: top 0.2s ease;
-    }
-    .skip-link:focus { top: 16px; }
+  html { scroll-behavior: smooth; }
 
-    .shell {
-      width: min(var(--max), calc(100% - 40px));
-      margin: 0 auto;
-    }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.75;
+    -webkit-font-smoothing: antialiased;
+  }
 
-    .site-header {
-      position: sticky;
-      top: 0;
-      z-index: 50;
-      background: rgba(11, 18, 32, 0.86);
-      backdrop-filter: blur(16px);
-      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-    }
-    .nav {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 20px;
-      min-height: 72px;
-    }
-    .brand {
-      display: inline-flex;
-      align-items: center;
-      gap: 12px;
-      color: #f8fafc;
-      min-width: 0;
-    }
-    .brand-mark {
-      width: 42px;
-      height: 42px;
-      border-radius: 12px;
-      display: grid;
-      place-items: center;
-      background: linear-gradient(145deg, var(--teal), #042f2e);
-      border: 1px solid rgba(45, 212, 191, 0.35);
-      color: #f0fdfa;
-      font-weight: 800;
-      letter-spacing: -0.04em;
-      font-size: 0.95rem;
-      flex: 0 0 auto;
-    }
-    .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-    .brand-text strong { font-size: 1rem; letter-spacing: 0.01em; }
-    .brand-text small { color: #94a3b8; font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; }
+  a { color: var(--accent-ink); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-    .nav-links {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .nav-links a {
-      color: #cbd5e1;
-      font-size: 0.88rem;
-      padding: 8px 11px;
-      border-radius: 9px;
-      transition: color 0.2s, background 0.2s;
-      white-space: nowrap;
-    }
-    .nav-links a:hover,
-    .nav-links a:focus-visible { color: #fff; background: rgba(148, 163, 184, 0.12); }
+  .wrap { width: min(var(--wrap), 100% - 2.5rem); margin-inline: auto; }
 
-    .nav-toggle {
-      display: none;
-      border: 1px solid rgba(148, 163, 184, 0.28);
-      background: transparent;
-      color: #e2e8f0;
-      border-radius: 9px;
-      padding: 8px 12px;
-      cursor: pointer;
-    }
+  /* ---------- 顶部导航 ---------- */
+  .top {
+    position: sticky; top: 0; z-index: 40;
+    background: var(--paper);
+    backdrop-filter: saturate(140%) blur(10px);
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    border-bottom: 1px solid var(--line);
+  }
+  .top-inner {
+    display: flex; align-items: center; gap: 1.5rem;
+    height: 62px;
+  }
+  .brand { display: flex; align-items: center; gap: .6rem; font-family: var(--serif); font-size: 1.05rem; letter-spacing: .02em; }
+  .brand:hover { text-decoration: none; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 8px;
+    background: var(--teal); color: #fff;
+    display: grid; place-items: center;
+    font-size: .78rem; font-weight: 700; letter-spacing: .02em;
+  }
+  .brand small { color: var(--muted); font-family: var(--mono); font-size: .72rem; letter-spacing: .06em; }
+  .nav { display: flex; gap: .25rem; margin-left: auto; }
+  .nav a {
+    color: var(--ink-soft); font-size: .86rem;
+    padding: .35rem .7rem; border-radius: 999px;
+-webkit-tap-highlight-color: transparent;
+  }
+  .nav a:hover { background: var(--paper-deep); text-decoration: none; }
+  .nav a.active { color: var(--accent-ink); background: #f2e3d7; font-weight: 600; }
+  .repo-btn {
+    display: inline-flex; align-items: center; gap: .4rem;
+    border: 1px solid var(--line-strong); border-radius: 999px;
+    padding: .35rem .85rem; font-size: .84rem; color: var(--ink-soft);
+    background: var(--surface);
+  }
+  .repo-btn:hover { text-decoration: none; border-color: var(--accent); color: var(--accent-ink); }
 
-    .hero {
-      position: relative;
-      overflow: hidden;
-      color: #f8fafc;
-      background:
-        radial-gradient(900px 480px at 82% -10%, rgba(20, 184, 166, 0.22), transparent 62%),
-        radial-gradient(720px 420px at 6% 8%, rgba(37, 99, 235, 0.20), transparent 60%),
-        linear-gradient(180deg, #0b1220 0%, #0b1220 72%, #0d1728 100%);
-    }
-    .hero::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background-image:
-        linear-gradient(rgba(148, 163, 184, 0.055) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(148, 163, 184, 0.055) 1px, transparent 1px);
-      background-size: 54px 54px;
-      mask-image: linear-gradient(180deg, #000 0%, transparent 88%);
-      pointer-events: none;
-    }
-    .hero-inner {
-      position: relative;
-      display: grid;
-      grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
-      gap: 56px;
-      align-items: center;
-      padding: 76px 0 52px;
-    }
-    .eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 9px;
-      margin: 0 0 20px;
-      color: #99f6e4;
-      font-size: 0.76rem;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      font-weight: 700;
-    }
-    .eyebrow .dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--teal-bright);
-      box-shadow: 0 0 0 5px rgba(20, 184, 166, 0.14);
-    }
-    h1 {
-      margin: 0;
-      font-size: clamp(2.5rem, 5.1vw, 4.45rem);
-      line-height: 1.08;
-      letter-spacing: -0.055em;
-      font-weight: 800;
-    }
-    h1 .accent {
-      background: linear-gradient(92deg, #5eead4 0%, #7dd3fc 48%, #a5b4fc 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-    }
-    .lede {
-      max-width: 650px;
-      margin: 24px 0 0;
-      color: #cbd5e1;
-      font-size: clamp(1rem, 1.35vw, 1.14rem);
-      line-height: 1.85;
-    }
-    .lede strong { color: #f8fafc; font-weight: 650; }
-    .hero-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 12px;
-      margin-top: 30px;
-    }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 9px;
-      min-height: 46px;
-      padding: 0 20px;
-      border-radius: 11px;
-      border: 1px solid transparent;
-      font-weight: 650;
-      font-size: 0.93rem;
-      cursor: pointer;
-      transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
-    }
-    .btn:hover { transform: translateY(-1px); }
-    .btn-primary { background: #f0fdfa; color: #0f172a; }
-    .btn-primary:hover { background: #ccfbf1; }
-    .btn-ghost {
-      color: #e2e8f0;
-      border-color: rgba(148, 163, 184, 0.32);
-      background: rgba(148, 163, 184, 0.06);
-    }
-    .btn-ghost:hover { background: rgba(148, 163, 184, 0.14); }
+  /* ---------- Hero ---------- */
+  .hero {
+    position: relative; overflow: hidden;
+    border-bottom: 1px solid var(--line);
+    background:
+      repeating-linear-gradient(to bottom, transparent 0 31px, rgba(168, 63, 27, .055) 31px 32px),
+      radial-gradient(1100px 380px at 78% -10%, #fbf0dd 0%, transparent 70%),
+      var(--paper);
+  }
+  .hero::after {
+    content: ""; position: absolute; left: 2.6rem; top: 0; bottom: 0; width: 1px;
+    background: linear-gradient(to bottom, transparent, rgba(168, 63, 27, .28) 18%, rgba(168, 63, 27, .28) 82%, transparent);
+  }
+  .hero-grid {
+    display: grid; grid-template-columns: 1.08fr .92fr; gap: 3rem;
+    align-items: center; padding: 4.2rem 0 4.4rem;
+  }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: .5rem;
+    font-family: var(--mono); font-size: .74rem; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: .25rem .7rem; background: var(--surface);
+  }
+  .hero h1 {
+    font-family: var(--serif); font-weight: 700;
+    font-size: clamp(2.5rem, 5.4vw, 3.9rem); line-height: 1.12;
+    letter-spacing: -.01em; margin: 1.1rem 0 0;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero h1 .latin { display: block; font-size: .3em; letter-spacing: .22em; color: var(--muted); font-weight: 500; margin-top: .7rem; }
+  .lead { font-size: 1.06rem; color: var(--ink-soft); margin: 1.2rem 0 0; max-width: 34em; }
+  .chips { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: 1.4rem; padding: 0; list-style: none; }
+  .chips li {
+    font-size: .78rem; color: var(--ink-soft);
+    border: 1px solid var(--line); background: var(--surface);
+    border-radius: 6px; padding: .2rem .55rem;
+  }
+  .cta { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.8rem; }
+  .btn {
+    display: inline-flex; align-items: center; gap: .5rem;
+    border-radius: 10px; padding: .68rem 1.15rem;
+    font-size: .92rem; font-weight: 600; border: 1px solid transparent;
+  }
+  .btn:hover { text-decoration: none; }
+  .btn-primary { background: var(--accent); color: #fff8f2; box-shadow: var(--shadow); }
+  .btn-primary:hover { background: var(--accent-ink); }
+  .btn-ghost { border-color: var(--line-strong); color: var(--ink-soft); background: var(--surface); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent-ink); }
 
-    .hero-pills {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 28px;
-    }
-    .pill {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      padding: 5px 11px;
-      border: 1px solid rgba(148, 163, 184, 0.22);
-      border-radius: 999px;
-      color: #cbd5e1;
-      font-size: 0.78rem;
-      background: rgba(15, 23, 42, 0.34);
-    }
-    .pill b { color: #f8fafc; font-weight: 650; }
+  /* Hero 右侧：索引卡 */
+  .card-stack { position: relative; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 1.15rem 1.25rem;
+    transform: rotate(-1.1deg);
+  }
+  .card + .card { position: absolute; inset: 1.1rem -1.1rem auto 1.6rem; transform: rotate(1.4deg); z-index: -1; }
+  .card-label {
+    font-family: var(--mono); font-size: .7rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted);
+  }
+  .card h3 { font-family: var(--serif); font-size: 1rem; margin: .35rem 0 .1rem; }
+  .card .meta { font-size: .76rem; color: var(--muted); }
+  .card p { font-size: .9rem; margin: .6rem 0 .8rem; color: var(--ink-soft); }
+  .card mark { background: #f7e2c0; color: var(--ink); padding: 0 .15em; border-radius: 3px; }
+  .tags { display: flex; gap: .35rem; flex-wrap: wrap; }
+  .tags span {
+    font-family: var(--mono); font-size: .7rem; color: var(--teal);
+    background: var(--teal-soft); border-radius: 999px; padding: .1rem .5rem;
+  }
+  .grade-row { display: flex; gap: .4rem; margin-top: .75rem; }
+  .grade-row span {
+    flex: 1; text-align: center; font-size: .76rem; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 7px; padding: .22rem 0;
+  }
+  .grade-row span.on { border-color: var(--teal); color: var(--teal); background: var(--teal-soft); font-weight: 600; }
 
-    .runtime-card {
-      position: relative;
-      border-radius: 22px;
-      border: 1px solid rgba(148, 163, 184, 0.22);
-      background: linear-gradient(180deg, rgba(17, 26, 46, 0.96), rgba(9, 15, 28, 0.98));
-      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.36);
-      padding: 20px;
-      overflow: hidden;
-    }
-    .runtime-card::after {
-      content: "";
-      position: absolute;
-      width: 220px;
-      height: 220px;
-      right: -80px;
-      top: -100px;
-      background: radial-gradient(circle, rgba(20, 184, 166, 0.22), transparent 68%);
-      pointer-events: none;
-    }
-    .runtime-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 14px;
-      color: #94a3b8;
-      font-size: 0.76rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      margin-bottom: 15px;
-    }
-    .runtime-head .mono { color: #5eead4; text-transform: none; letter-spacing: 0; }
-    .pulse {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #34d399;
-      box-shadow: 0 0 0 5px rgba(52, 211, 153, 0.13);
-      display: inline-block;
-      margin-right: 8px;
-    }
-    .runtime-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      padding: 10px 0;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-      font-size: 0.86rem;
-      color: #94a3b8;
-    }
-    .runtime-row strong { color: #e2e8f0; font-weight: 600; text-align: right; }
-    .runtime-row .ok { color: #86efac; }
-    .terminal {
-      margin-top: 16px;
-      border-radius: 13px;
-      border: 1px solid rgba(148, 163, 184, 0.16);
-      background: #060b14;
-      overflow: hidden;
-    }
-    .terminal-bar {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 9px 12px;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
-      color: #64748b;
-      font-size: 0.7rem;
-      font-family: var(--mono);
-    }
-    .terminal-bar span { width: 8px; height: 8px; border-radius: 50%; background: #334155; }
-    .terminal-bar span:first-child { background: #f87171; }
-    .terminal-bar span:nth-child(2) { background: #fbbf24; }
-    .terminal-bar span:nth-child(3) { background: #34d399; }
-    .terminal-bar em { margin-left: auto; font-style: normal; }
-    .terminal pre {
-      margin: 0;
-      padding: 15px;
-      overflow-x: auto;
-      color: #cbd5e1;
-      font-size: 0.74rem;
-      line-height: 1.7;
-    }
-    .terminal .kw { color: #7dd3fc; }
-    .terminal .str { color: #fcd34d; }
-    .terminal .ok { color: #86efac; }
-    .runtime-note {
-      margin: 14px 0 0;
-      color: #64748b;
-      font-size: 0.74rem;
-      line-height: 1.65;
-    }
+  /* 数字条 */
+  .stats { border-top: 1px solid var(--line); background: var(--surface); }
+  .stats-inner {
+    width: min(var(--wrap), 100% - 2.5rem); margin-inline: auto;
+    display: grid; grid-template-columns: repeat(6, 1fr);
+  }
+  .stat { padding: 1rem 1.2rem; border-right: 1px solid var(--line); }
+  .stat:last-child { border-right: 0; }
+  .stat b { display: block; font-family: var(--serif); font-size: 1.45rem; line-height: 1.2; }
+  .stat span { font-size: .74rem; color: var(--muted); letter-spacing: .02em; }
 
-    .stat-strip {
-      position: relative;
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 1px;
-      margin-top: -1px;
-      background: var(--line);
-      border: 1px solid var(--line);
-      border-radius: 18px;
-      overflow: hidden;
-      box-shadow: var(--shadow-soft);
-      transform: translateY(34px);
-    }
-    .stat-strip > div {
-      background: var(--surface);
-      padding: 20px 22px;
-    }
-    .stat-strip strong {
-      display: block;
-      font-size: 1.6rem;
-      line-height: 1.1;
-      letter-spacing: -0.04em;
-      color: var(--ink);
-    }
-    .stat-strip span { color: var(--muted); font-size: 0.78rem; }
-    .spacer-34 { height: 34px; }
+  /* ---------- 通用 section ---------- */
+  section { padding: 4.5rem 0; border-bottom: 1px solid var(--line); }
+  .sec-head { display: flex; align-items: baseline; gap: 1rem; margin-bottom: 2.2rem; }
+  .sec-no { font-family: var(--mono); font-size: .78rem; color: var(--accent); letter-spacing: .12em; }
+  .sec-head h2 { font-family: var(--serif); font-size: clamp(1.5rem, 2.6vw, 2rem); margin: 0; letter-spacing: -.01em; }
+  .sec-head p { margin: 0; color: var(--muted); font-size: .9rem; margin-left: auto; max-width: 32em; text-align: right; }
 
-    section { scroll-margin-top: 92px; }
-    .section { padding: 84px 0 0; }
-    .section-head { max-width: 780px; margin-bottom: 34px; }
-    .kicker {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--teal);
-      font-size: 0.74rem;
-      font-weight: 750;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
-      margin-bottom: 12px;
-    }
-    .kicker::before { content: ""; width: 22px; height: 2px; background: currentColor; }
-    h2 {
-      margin: 0;
-      font-size: clamp(1.75rem, 3.1vw, 2.55rem);
-      line-height: 1.22;
-      letter-spacing: -0.035em;
-      font-weight: 800;
-      color: var(--ink);
-    }
-    .section-lead {
-      margin: 14px 0 0;
-      color: var(--muted);
-      font-size: 1rem;
-      line-height: 1.85;
-    }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; }
+  .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1.1rem; }
 
-    .about-grid {
-      display: grid;
-      grid-template-columns: 1.02fr 0.98fr;
-      gap: 18px;
-    }
-    .panel {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 26px;
-      box-shadow: var(--shadow-soft);
-    }
-    .panel h3 { margin: 0 0 10px; font-size: 1.12rem; letter-spacing: -0.02em; }
-    .panel p { margin: 0; color: var(--muted); font-size: 0.94rem; line-height: 1.85; }
-    .panel p + p { margin-top: 12px; }
-    .principle-list { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
-    .principle-list li {
-      display: grid;
-      grid-template-columns: 34px minmax(0, 1fr);
-      gap: 12px;
-      align-items: start;
-      padding: 13px 0;
-      border-bottom: 1px solid var(--line);
-    }
-    .principle-list li:last-child { border-bottom: 0; padding-bottom: 0; }
-    .principle-list .num {
-      width: 30px;
-      height: 30px;
-      border-radius: 9px;
-      display: grid;
-      place-items: center;
-      background: #ecfdf5;
-      color: var(--teal);
-      font-family: var(--mono);
-      font-size: 0.75rem;
-      font-weight: 700;
-    }
-    .principle-list strong { display: block; font-size: 0.94rem; margin-bottom: 2px; }
-    .principle-list span { color: var(--muted); font-size: 0.86rem; line-height: 1.7; }
+  .panel {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 1.4rem 1.5rem;
+  }
+  .panel h3 { font-family: var(--serif); font-size: 1.06rem; margin: 0 0 .45rem; }
+  .panel p { margin: 0; color: var(--ink-soft); font-size: .9rem; }
+  .panel .quote { font-family: var(--mono); font-size: .76rem; color: var(--muted); margin-top: .8rem; }
+  .num {
+    font-family: var(--mono); font-size: .74rem; color: var(--accent);
+    border-bottom: 1px solid var(--line-strong); padding-bottom: .5rem; display: block; margin-bottom: .8rem;
+  }
 
-    .feature-grid {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
-    }
-    .feature {
-      position: relative;
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      padding: 24px;
-      box-shadow: var(--shadow-soft);
-      overflow: hidden;
-      transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-    }
-    .feature:hover {
-      transform: translateY(-4px);
-      border-color: #b6e3dc;
-      box-shadow: 0 20px 46px rgba(15, 23, 42, 0.10);
-    }
-    .feature .idx {
-      display: inline-flex;
-      color: var(--teal);
-      font-family: var(--mono);
-      font-size: 0.73rem;
-      font-weight: 700;
-      letter-spacing: 0.12em;
-      margin-bottom: 16px;
-    }
-    .feature h3 { margin: 0 0 8px; font-size: 1.02rem; letter-spacing: -0.02em; }
-    .feature p { margin: 0; color: var(--muted); font-size: 0.88rem; line-height: 1.8; }
-    .feature .tag {
-      display: inline-block;
-      margin-top: 14px;
-      padding: 3px 9px;
-      border-radius: 999px;
-      background: #f0fdfa;
-      color: var(--teal);
-      font-size: 0.72rem;
-      font-weight: 650;
-    }
+  /* 代码 */
+  pre {
+    margin: 0; background: #241f19; color: #efe4d3;
+    border-radius: 10px; padding: 1rem 1.1rem; overflow-x: auto;
+    font-family: var(--mono); font-size: .8rem; line-height: 1.65;
+    border: 1px solid #14100c;
+  }
+  pre .k { color: #e9b18a; }
+  pre .s { color: #9ecfb4; }
+  pre .cm { color: #8d8071; }
+  .code-block { position: relative; }
+  .copy {
+    position: absolute; top: .55rem; right: .55rem;
+    font-family: var(--mono); font-size: .68rem; letter-spacing: .04em;
+    color: #cfc0aa; background: #332c24; border: 1px solid #4a4034;
+    border-radius: 6px; padding: .18rem .5rem; cursor: pointer;
+  }
+  .copy:hover { color: #fff; border-color: #6b5c49; }
+  .copy.done { color: #9ecfb4; border-color: #3d6b57; }
 
-    .arch-wrap {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 22px;
-      padding: 28px;
-      box-shadow: var(--shadow-soft);
-    }
-    .arch-grid {
-      display: grid;
-      grid-template-columns: 1fr 42px 1fr 42px 1fr 42px 1.1fr;
-      align-items: center;
-      gap: 0;
-    }
-    .arch-node {
-      min-height: 158px;
-      border-radius: 14px;
-      border: 1px solid var(--line);
-      background: linear-gradient(180deg, #ffffff, #f8fafc);
-      padding: 18px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      gap: 12px;
-    }
-    .arch-node.dark {
-      color: #f8fafc;
-      background: linear-gradient(150deg, #0f172a, #0b3b36);
-      border-color: rgba(20, 184, 166, 0.3);
-    }
-    .arch-node .step {
-      font-family: var(--mono);
-      font-size: 0.68rem;
-      letter-spacing: 0.12em;
-      color: var(--teal);
-      text-transform: uppercase;
-    }
-    .arch-node.dark .step { color: #5eead4; }
-    .arch-node h3 { margin: 0; font-size: 0.98rem; letter-spacing: -0.02em; }
-    .arch-node p { margin: 0; font-size: 0.8rem; line-height: 1.7; color: var(--muted); }
-    .arch-node.dark p { color: #cbd5e1; }
-    .arch-arrow {
-      display: grid;
-      place-items: center;
-      color: var(--line-strong);
-      font-family: var(--mono);
-      font-size: 1rem;
-    }
-    .arch-detail {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-top: 18px;
-    }
-    .mini-card {
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 18px;
-      background: #fbfdff;
-      min-width: 0;
-    }
-    .mini-card h4 { margin: 0 0 10px; font-size: 0.9rem; }
-    .mini-card ul { margin: 0; padding-left: 18px; color: var(--muted); font-size: 0.84rem; line-height: 1.85; }
-    .mini-card li + li { margin-top: 3px; }
-    .mini-card code {
-      background: #eef6f5;
-      color: #0f766e;
-      padding: 1px 5px;
-      border-radius: 5px;
-      font-size: 0.78rem;
-      overflow-wrap: anywhere;
-    }
-    .query-block {
-      margin-top: 14px;
-      background: #0b1220;
-      border-radius: 12px;
-      padding: 14px 16px;
-      overflow-x: auto;
-    }
-    .query-block code { color: #cbd5e1; font-size: 0.75rem; line-height: 1.8; white-space: pre; }
-    .query-block .hl { color: #5eead4; }
-    .callout {
-      display: flex;
-      gap: 12px;
-      align-items: flex-start;
-      margin-top: 16px;
-      padding: 14px 16px;
-      border-radius: 12px;
-      background: #ecfdf5;
-      border: 1px solid #b7eadf;
-      color: #115e59;
-      font-size: 0.86rem;
-      line-height: 1.75;
-    }
-    .callout strong { color: #0f766e; }
+  /* seekdb 区 */
+  .seekdb-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6rem; align-items: start; }
+  .points { list-style: none; margin: 0; padding: 0; display: grid; gap: .9rem; }
+  .points li { display: grid; grid-template-columns: 1.6rem 1fr; gap: .8rem; }
+  .points .dot {
+    width: 1.6rem; height: 1.6rem; border-radius: 50%;
+    background: var(--teal-soft); color: var(--teal);
+    display: grid; place-items: center; font-family: var(--mono); font-size: .76rem; font-weight: 700;
+  }
+  .points b { font-family: var(--serif); font-size: .98rem; }
+  .points p { margin: .1rem 0 0; font-size: .88rem; color: var(--ink-soft); }
 
-    .demo-note {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 18px;
-      padding: 6px 11px;
-      border-radius: 999px;
-      background: var(--amber-soft);
-      color: #92400e;
-      font-size: 0.78rem;
-      font-weight: 650;
-    }
-    .shot-grid {
-      display: grid;
-      grid-template-columns: 1.1fr 0.9fr;
-      gap: 18px;
-      align-items: start;
-    }
-    .shot {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      overflow: hidden;
-      box-shadow: var(--shadow-soft);
-    }
-    .shot button {
-      display: block;
-      width: 100%;
-      padding: 0;
-      border: 0;
-      background: #eef2f7;
-      cursor: zoom-in;
-      line-height: 0;
-    }
-    .shot img {
-      width: 100%;
-      height: 520px;
-      object-fit: cover;
-      object-position: top center;
-    }
-    .shot figcaption {
-      padding: 15px 17px 17px;
-      color: var(--muted);
-      font-size: 0.84rem;
-      line-height: 1.7;
-      border-top: 1px solid var(--line);
-    }
-    .shot figcaption strong { display: block; color: var(--ink); font-size: 0.9rem; margin-bottom: 2px; }
+  .channels { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .channel-head {
+    display: flex; align-items: center; gap: .4rem;
+    padding: .8rem .9rem; border-bottom: 1px solid var(--line); background: var(--paper-deep);
+  }
+  .channel-head .label { font-family: var(--mono); font-size: .72rem; color: var(--muted); margin-right: auto; letter-spacing: .06em; }
+  .tab {
+    font-size: .82rem; border: 1px solid var(--line-strong); background: var(--surface);
+    color: var(--ink-soft); border-radius: 999px; padding: .22rem .8rem; cursor: pointer;
+  }
+  .tab[aria-selected="true"] { background: var(--teal); border-color: var(--teal); color: #fff; }
+  .channel-body { padding: 1rem 1.1rem 1.15rem; min-height: 216px; }
+  .result { display: grid; grid-template-columns: 1.6rem 1fr; gap: .7rem; padding: .55rem 0; border-bottom: 1px dashed var(--line); }
+  .result:last-child { border-bottom: 0; }
+  .result .rank { font-family: var(--mono); font-size: .76rem; color: var(--muted); padding-top: .15rem; }
+  .result .src { font-size: .74rem; color: var(--muted); }
+  .result .txt { font-size: .86rem; color: var(--ink-soft); margin-top: .1rem; }
+  .result .txt mark { background: #f7e2c0; color: var(--ink); border-radius: 3px; }
+  .channel-note { font-size: .76rem; color: var(--muted); margin-top: .8rem; font-family: var(--mono); }
 
-    .evidence-queries {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
-      margin-top: 18px;
-    }
-    .query-card {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 18px;
-    }
-    .query-card .q {
-      display: inline-block;
-      font-family: var(--mono);
-      font-size: 0.8rem;
-      color: var(--teal);
-      background: #ecfdf5;
-      padding: 3px 8px;
-      border-radius: 6px;
-      margin-bottom: 10px;
-    }
-    .query-card strong { display: block; font-size: 0.92rem; }
-    .query-card p { margin: 5px 0 0; color: var(--muted); font-size: 0.82rem; line-height: 1.7; }
-    .query-card .score {
-      display: inline-block;
-      margin-top: 9px;
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      color: var(--amber);
-      background: var(--amber-soft);
-      padding: 2px 7px;
-      border-radius: 999px;
-    }
+  .evidence { margin-top: 1.6rem; }
+  .evidence .kv { display: grid; grid-template-columns: 6.5rem 1fr; gap: .4rem 1rem; font-size: .86rem; }
+  .evidence dt { color: var(--muted); }
+  .evidence dd { margin: 0; color: var(--ink-soft); font-family: var(--mono); font-size: .8rem; word-break: break-all; }
 
-    .start-grid {
-      display: grid;
-      grid-template-columns: 0.92fr 1.08fr;
-      gap: 18px;
-      align-items: start;
-    }
-    .step-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; counter-reset: step; }
-    .step-list li {
-      counter-increment: step;
-      display: grid;
-      grid-template-columns: 30px minmax(0, 1fr);
-      gap: 12px;
-      align-items: start;
-      padding: 12px 0;
-      border-bottom: 1px solid var(--line);
-    }
-    .step-list li:last-child { border-bottom: 0; padding-bottom: 0; }
-    .step-list li::before {
-      content: counter(step);
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      display: grid;
-      place-items: center;
-      background: var(--ink);
-      color: #fff;
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      font-weight: 700;
-    }
-    .step-list strong { display: block; font-size: 0.92rem; }
-    .step-list span { color: var(--muted); font-size: 0.84rem; line-height: 1.7; }
+  /* 截图 */
+  .shot { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+  .shot img { display: block; width: 100%; height: auto; }
+  .shot figcaption { padding: .8rem 1rem; font-size: .82rem; color: var(--muted); border-top: 1px solid var(--line); }
+  .shot figcaption b { color: var(--ink-soft); }
 
-    .code-card {
-      background: #0b1220;
-      border-radius: 16px;
-      overflow: hidden;
-      border: 1px solid rgba(148, 163, 184, 0.18);
-      box-shadow: var(--shadow);
-    }
-    .code-head {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      padding: 11px 14px;
-      border-bottom: 1px solid rgba(148, 163, 184, 0.14);
-      color: #94a3b8;
-      font-size: 0.72rem;
-      font-family: var(--mono);
-    }
-    .copy-btn {
-      border: 1px solid rgba(148, 163, 184, 0.25);
-      background: rgba(148, 163, 184, 0.08);
-      color: #cbd5e1;
-      border-radius: 7px;
-      padding: 4px 9px;
-      font-size: 0.7rem;
-      cursor: pointer;
-    }
-    .copy-btn:hover { background: rgba(148, 163, 184, 0.18); }
-    .code-card pre {
-      margin: 0;
-      padding: 18px;
-      overflow-x: auto;
-      color: #dbeafe;
-      font-size: 0.8rem;
-      line-height: 1.9;
-    }
-    .code-card .comment { color: #64748b; }
-    .code-card .cmd { color: #5eead4; }
-    .code-card .flag { color: #fcd34d; }
+  /* 运行 */
+  .run-grid { display: grid; grid-template-columns: .95fr 1.05fr; gap: 1.8rem; align-items: start; }
+  .steps { counter-reset: step; list-style: none; margin: 0; padding: 0; display: grid; gap: .7rem; }
+  .steps li { counter-increment: step; display: grid; grid-template-columns: 1.5rem 1fr; gap: .8rem; font-size: .9rem; color: var(--ink-soft); }
+  .steps li::before {
+    content: counter(step);
+    width: 1.5rem; height: 1.5rem; border-radius: 50%;
+    border: 1px solid var(--line-strong); color: var(--accent);
+    display: grid; place-items: center; font-family: var(--mono); font-size: .72rem;
+  }
+  .steps code, .inline { font-family: var(--mono); font-size: .84em; background: #f1e8d8; border-radius: 4px; padding: .05rem .3rem; color: var(--accent-ink); }
 
-    .sample-grid {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 14px;
-    }
-    .sample-step {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 18px;
-    }
-    .sample-step .n {
-      display: inline-grid;
-      place-items: center;
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      background: var(--amber-soft);
-      color: #92400e;
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      font-weight: 700;
-      margin-bottom: 12px;
-    }
-    .sample-step h3 { margin: 0 0 5px; font-size: 0.9rem; }
-    .sample-step p { margin: 0; color: var(--muted); font-size: 0.82rem; line-height: 1.7; }
+  table { width: 100%; border-collapse: collapse; font-size: .86rem; }
+  caption { text-align: left; font-size: .78rem; color: var(--muted); padding-bottom: .5rem; }
+  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; color: var(--muted); font-size: .78rem; letter-spacing: .04em; }
+  td:first-child { font-family: var(--mono); font-size: .78rem; color: var(--muted); white-space: nowrap; }
+  .ok { color: var(--teal); font-weight: 600; }
 
-    .verify-wrap {
-      display: grid;
-      grid-template-columns: 0.85fr 1.15fr;
-      gap: 18px;
-      align-items: start;
-    }
-    .score-card {
-      background: linear-gradient(150deg, #0f172a, #0b3b36);
-      color: #f8fafc;
-      border-radius: 20px;
-      padding: 28px;
-      box-shadow: var(--shadow);
-      position: relative;
-      overflow: hidden;
-    }
-    .score-card::after {
-      content: "";
-      position: absolute;
-      width: 260px;
-      height: 260px;
-      right: -120px;
-      bottom: -140px;
-      background: radial-gradient(circle, rgba(20, 184, 166, 0.3), transparent 66%);
-    }
-    .score-card .label {
-      color: #5eead4;
-      font-size: 0.72rem;
-      font-weight: 750;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-    }
-    .score-card .big {
-      margin-top: 10px;
-      font-size: clamp(3.6rem, 8vw, 5.8rem);
-      line-height: 0.95;
-      letter-spacing: -0.07em;
-      font-weight: 800;
-    }
-    .score-card .big small { font-size: 0.28em; letter-spacing: -0.02em; color: #94a3b8; font-weight: 600; }
-    .score-card p { position: relative; margin: 16px 0 0; color: #cbd5e1; font-size: 0.86rem; line-height: 1.8; }
-    .env-table {
-      display: grid;
-      gap: 8px;
-      margin-top: 18px;
-      position: relative;
-    }
-    .env-table div {
-      display: flex;
-      justify-content: space-between;
-      gap: 16px;
-      padding-top: 8px;
-      border-top: 1px solid rgba(148, 163, 184, 0.18);
-      font-size: 0.78rem;
-      color: #94a3b8;
-    }
-    .env-table strong { color: #e2e8f0; font-weight: 600; text-align: right; }
-    .test-list {
-      background: var(--surface);
-      border: 1px solid var(--line);
-      border-radius: 20px;
-      padding: 24px;
-      box-shadow: var(--shadow-soft);
-    }
-    .test-list h3 { margin: 0 0 14px; font-size: 1rem; }
-    .test-list ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-    .test-list li {
-      display: grid;
-      grid-template-columns: 22px minmax(0, 1fr);
-      gap: 9px;
-      align-items: start;
-      color: var(--muted);
-      font-size: 0.84rem;
-      line-height: 1.7;
-    }
-    .test-list .check {
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      display: grid;
-      place-items: center;
-      background: var(--green-soft);
-      color: var(--green);
-      font-size: 0.68rem;
-      font-weight: 800;
-      margin-top: 1px;
-    }
-    .test-list strong { color: var(--ink); font-weight: 650; }
+  /* 开发记录 */
+  .record { display: grid; grid-template-columns: .8fr 1.2fr; gap: 1.8rem; align-items: start; }
+  .account {
+    font-family: var(--mono); font-size: .82rem; color: var(--ink-soft);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: .9rem 1rem; display: grid; gap: .35rem;
+  }
+  .account span { color: var(--muted); }
+  .log { list-style: none; margin: 0; padding: 0; display: grid; gap: .75rem; font-size: .88rem; color: var(--ink-soft); }
+  .log b { color: var(--ink); font-family: var(--serif); }
 
-    .disclaimer-box {
-      margin-top: 18px;
-      background: #fffbeb;
-      border: 1px solid #fde68a;
-      border-radius: 14px;
-      padding: 18px 20px;
-      color: #78350f;
-      font-size: 0.86rem;
-      line-height: 1.8;
-    }
-    .disclaimer-box strong { display: block; margin-bottom: 4px; color: #92400e; }
+  footer { padding: 2.6rem 0 3.2rem; font-size: .82rem; color: var(--muted); }
+  .foot-grid { display: flex; flex-wrap: wrap; gap: 1rem 2rem; justify-content: space-between; align-items: center; }
+  .foot-links { display: flex; flex-wrap: wrap; gap: 1.2rem; }
 
-    .closing {
-      margin: 84px 0 0;
-      padding: 46px 0 54px;
-      background: var(--dark);
-      color: #cbd5e1;
-    }
-    .closing-inner {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 28px;
-      flex-wrap: wrap;
-    }
-    .closing h2 { color: #f8fafc; font-size: 1.5rem; }
-    .closing p { margin: 8px 0 0; max-width: 640px; font-size: 0.88rem; line-height: 1.8; color: #94a3b8; }
-    .closing .meta { font-size: 0.78rem; color: #64748b; text-align: right; line-height: 1.9; }
-    .closing .meta strong { color: #e2e8f0; }
-    .closing .meta a { color: #5eead4; text-decoration: underline; text-underline-offset: 3px; }
-    .closing .meta a:hover { color: #99f6e4; }
+  .reveal { opacity: 0; transform: translateY(12px); transition: opacity .5s ease, transform .5s ease; }
+  .reveal.in { opacity: 1; transform: none; }
 
-    .reveal { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .reveal { opacity: 1; transform: none; transition: none; }
+  }
 
-    dialog.lightbox {
-      border: 0;
-      padding: 0;
-      background: transparent;
-      max-width: min(1100px, 94vw);
-      max-height: 92vh;
-    }
-    dialog.lightbox::backdrop { background: rgba(2, 6, 23, 0.82); backdrop-filter: blur(4px); }
-    dialog.lightbox img {
-      max-height: 86vh;
-      width: auto;
-      margin: 0 auto;
-      border-radius: 12px;
-      box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
-    }
-    .lightbox-close {
-      position: fixed;
-      top: 18px;
-      right: 18px;
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      border: 1px solid rgba(255, 255, 255, 0.3);
-      background: rgba(15, 23, 42, 0.7);
-      color: #fff;
-      cursor: pointer;
-      font-size: 1.1rem;
-    }
-
-    @media (max-width: 980px) {
-      .hero-inner { grid-template-columns: 1fr; gap: 34px; padding-top: 56px; }
-      .runtime-card { max-width: 660px; }
-      .feature-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .arch-grid { grid-template-columns: 1fr; gap: 10px; }
-      .arch-arrow { transform: rotate(90deg); height: 24px; }
-      .arch-detail { grid-template-columns: 1fr; }
-      .shot-grid, .start-grid, .verify-wrap, .about-grid { grid-template-columns: 1fr; }
-      .sample-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .evidence-queries { grid-template-columns: 1fr; }
-    }
-
-    @media (max-width: 760px) {
-      .shell { width: min(var(--max), calc(100% - 28px)); }
-      .shot img { height: 360px; }
-      .nav-toggle { display: inline-flex; }
-      .nav-links {
-        display: none;
-        position: absolute;
-        left: 14px;
-        right: 14px;
-        top: 68px;
-        flex-direction: column;
-        align-items: stretch;
-        gap: 2px;
-        padding: 10px;
-        background: #0f172a;
-        border: 1px solid rgba(148, 163, 184, 0.22);
-        border-radius: 14px;
-        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
-      }
-      .nav-links.open { display: flex; }
-      .nav-links a { padding: 11px 12px; }
-      .stat-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .feature-grid, .sample-grid { grid-template-columns: 1fr; }
-      .section { padding-top: 64px; }
-      .hero-inner { padding-bottom: 38px; }
-      .runtime-row { font-size: 0.82rem; }
-      .closing-inner { flex-direction: column; }
-      .closing .meta { text-align: left; }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      html { scroll-behavior: auto; }
-      .reveal { opacity: 1; transform: none; transition: none; }
-      .btn, .feature { transition: none; }
-    }
-
-    :focus-visible {
-      outline: 3px solid #5eead4;
-      outline-offset: 3px;
-      border-radius: 6px;
-    }
-  </style>
+  @media (max-width: 960px) {
+    .hero-grid { grid-template-columns: 1fr; gap: 2.2rem; padding: 3rem 0 3.2rem; }
+    .card-stack { max-width: 520px; }
+    .stats-inner { grid-template-columns: repeat(3, 1fr); }
+    .stat:nth-child(3n) { border-right: 0; }
+    .stat:nth-child(-n+3) { border-bottom: 1px solid var(--line); }
+    .grid-3 { grid-template-columns: 1fr; }
+    .grid-2, .seekdb-grid, .run-grid, .record { grid-template-columns: 1fr; }
+    .sec-head { flex-direction: column; gap: .4rem; }
+    .sec-head p { margin-left: 0; text-align: left; }
+    .nav { display: none; }
+  }
+</style>
 </head>
 <body>
-  <a class="skip-link" href="#main">跳到主要内容</a>
 
-  <header class="site-header">
-    <div class="shell nav">
-      <a class="brand" href="#top" aria-label="研读档案 EvidenceDesk，回到顶部">
-        <span class="brand-mark" aria-hidden="true">ED</span>
-        <span class="brand-text">
-          <strong>研读档案</strong>
-          <small>EvidenceDesk</small>
-        </span>
-      </a>
-      <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="navLinks">菜单</button>
-      <nav class="nav-links" id="navLinks" aria-label="主导航">
-        <a href="#about">项目</a>
-        <a href="demo.html">在线体验</a>
-        <a href="#features">功能</a>
-        <a href="#architecture">架构</a>
-        <a href="#demo">真实截图</a>
-        <a href="#start">运行</a>
-        <a href="#verify">测试结果</a>
-        <a href="https://github.com/caibolol/ODC_PowerContext/tree/2026-competition-ecosystem/qoder" target="_blank" rel="noopener noreferrer">源码仓库</a>
-      </nav>
-    </div>
-  </header>
+<header class="top">
+  <div class="wrap top-inner">
+    <a class="brand" href="#top">
+      <span class="brand-mark">页迹</span>
+      <span>PageTrail <small>· 本地资料助手</small></span>
+    </a>
+    <nav class="nav" aria-label="页面导航">
+      <a href="#problem">问题</a>
+      <a href="#features">功能</a>
+      <a href="#seekdb">seekdb</a>
+      <a href="#ui">界面</a>
+      <a href="#run">运行</a>
+      <a href="#record">开发记录</a>
+    </nav>
+    <a class="repo-btn" href="https://github.com/caibolol/ODC_PowerContext/tree/2026-competition-ecosystem-pagetrail/qoder" target="_blank" rel="noreferrer">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.07-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.15 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      代码仓库
+    </a>
+  </div>
+</header>
 
-  <main id="main">
-    <section class="hero" id="top">
-      <div class="shell hero-inner">
-        <div>
-          <p class="eyebrow"><span class="dot"></span> OceanBase 数据库大赛 · Qoder 赛道</p>
-          <h1>把资料摘录变成<br><span class="accent">可检索的证据库。</span></h1>
-          <p class="lede">
-            EvidenceDesk 面向学生与研究者：录入带来源的摘录，用 <strong>seekdb 原生 FULLTEXT</strong> 检索证据，
-            并保存复习进度。检索由真实数据库完成，不以页面字符串匹配冒充全文检索。
-          </p>
-          <div class="hero-actions">
-            <a class="btn btn-primary" href="demo.html">在线体验主要功能（无需部署）</a>
-            <a class="btn btn-ghost" href="#demo">查看真实运行截图</a>
-            <a class="btn btn-ghost" href="#verify">查看 84/84 测试结果</a>
-            <a class="btn btn-ghost" href="https://github.com/caibolol/ODC_PowerContext/tree/2026-competition-ecosystem/qoder" target="_blank" rel="noopener noreferrer">查看源码仓库</a>
-          </div>
-          <div class="hero-pills" aria-label="技术栈">
-            <span class="pill"><b>Node.js</b> + Express</span>
-            <span class="pill"><b>mysql2</b> 连接池</span>
-            <span class="pill"><b>seekdb</b> 127.0.0.1:2881</span>
-            <span class="pill"><b>FULLTEXT</b> WITH PARSER ik</span>
-            <span class="pill"><b>零</b> 外部模型 API</span>
-          </div>
-        </div>
+<main id="top">
 
-        <aside class="runtime-card" aria-label="本机真实运行状态摘要">
-          <div class="runtime-head">
-            <span><span class="pulse" aria-hidden="true"></span>本机运行状态</span>
-            <span class="mono">127.0.0.1:18748</span>
-          </div>
-          <div class="runtime-row"><span>数据库连接</span><strong class="ok">seekdb 已连接</strong></div>
-          <div class="runtime-row"><span>全文索引</span><strong>ft_body / ft_title · IK</strong></div>
-          <div class="runtime-row"><span>数据表</span><strong>odc_qoder_ 前缀</strong></div>
-          <div class="runtime-row"><span>集成测试</span><strong class="ok">81 / 81 通过</strong></div>
-          <div class="terminal" aria-label="真实检索语句示意">
-            <div class="terminal-bar"><span></span><span></span><span></span><em>seekdb · real MATCH AGAINST</em></div>
-            <pre><code><span class="kw">SELECT</span> e.*,
-  <span class="kw">MATCH</span>(e.body_text) <span class="kw">AGAINST</span>(<span class="str">?</span> <span class="kw">IN NATURAL LANGUAGE MODE</span>) body_score,
-  <span class="kw">MATCH</span>(e.title)     <span class="kw">AGAINST</span>(<span class="str">?</span> <span class="kw">IN NATURAL LANGUAGE MODE</span>) title_score
-<span class="kw">FROM</span> odc_qoder_excerpts e
-<span class="kw">WHERE</span> <span class="kw">MATCH</span>(e.body_text) <span class="kw">AGAINST</span>(<span class="str">?</span>)
-   <span class="kw">OR</span> <span class="kw">MATCH</span>(e.title) <span class="kw">AGAINST</span>(<span class="str">?</span>)
-<span class="kw">ORDER BY</span> title_score * 2 + body_score <span class="kw">DESC</span>;
-
-<span class="ok">✓ 中文查询命中指定 ID</span>
-<span class="ok">✓ 英文查询命中指定 ID</span></code></pre>
-          </div>
-          <p class="runtime-note">本页是作品介绍站，不连接你的本地数据库。应用本体与下列截图、测试结果来自本机真实 seekdb 环境。</p>
-        </aside>
-      </div>
-    </section>
-
-    <div class="shell">
-      <div class="stat-strip" aria-label="项目关键数字">
-        <div><strong>10</strong><span>条合成教学样例</span></div>
-        <div><strong>2</strong><span>张 odc_qoder_ 数据表</span></div>
-        <div><strong>2</strong><span>个 FULLTEXT IK 索引</span></div>
-        <div><strong>84/84</strong><span>项集成测试通过</span></div>
-      </div>
-    </div>
-    <div class="spacer-34" aria-hidden="true"></div>
-
-    <section class="section" id="about">
-      <div class="shell">
-        <div class="section-head reveal">
-          <p class="kicker">01 · 项目定位</p>
-          <h2>不是资料堆，而是带来源的证据工作台。</h2>
-          <p class="section-lead">
-            读论文、做调研时，真正难的是“我记得看过一句话，但找不到出处”。EvidenceDesk 把摘录、来源、标签和复习状态放在同一条记录里，
-            再用数据库全文索引把证据找回来。
-          </p>
-        </div>
-        <div class="about-grid">
-          <article class="panel reveal">
-            <h3>它解决什么问题</h3>
-            <p>摘录散落在笔记、网页和 PDF 中，来源链接与页码容易丢失；普通搜索只能匹配页面已加载的文字，无法利用数据库索引。</p>
-            <p>复习状态也常常另开表格维护，资料与进度脱节。EvidenceDesk 用一套数据模型把“找到证据”和“复习证据”连起来。</p>
-          </article>
-          <article class="panel reveal">
-            <h3>三条实现原则</h3>
-            <ul class="principle-list">
-              <li><span class="num">01</span><div><strong>真实数据库</strong><span>所有检索走 seekdb FULLTEXT + MATCH AGAINST；数据库断连时明确报错，不退回假数据。</span></div></li>
-              <li><span class="num">02</span><div><strong>来源可追溯</strong><span>标题、URL、页码、标签与正文一起保存，导出 Markdown 时保留完整来源信息。</span></div></li>
-              <li><span class="num">03</span><div><strong>复习有闭环</strong><span>未读、已读、待复习、已掌握四种状态与备注持久化，刷新或重启后仍在。</span></div></li>
-            </ul>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="features">
-      <div class="shell">
-        <div class="section-head reveal">
-          <p class="kicker">02 · 核心功能</p>
-          <h2>六件事，围绕“证据”完成闭环。</h2>
-          <p class="section-lead">功能不追求多，而是让每条资料都能被录入、检索、复习和导出。</p>
-        </div>
-        <div class="feature-grid">
-          <article class="feature reveal">
-            <span class="idx">01 / INPUT</span>
-            <h3>资料录入与来源</h3>
-            <p>录入标题、来源 URL、页码、正文摘录和标签。服务端校验长度、类型与 http/https 链接，所有 SQL 使用参数绑定。</p>
-            <span class="tag">参数绑定 + 输入校验</span>
-          </article>
-          <article class="feature reveal">
-            <span class="idx">02 / SEARCH</span>
-            <h3>真实全文检索</h3>
-            <p>seekdb 对 body_text 与 title 建立 IK 解析器的 FULLTEXT 索引，查询用 MATCH AGAINST 返回相关度并排序。</p>
-            <span class="tag">不是前端字符串匹配</span>
-          </article>
-          <article class="feature reveal">
-            <span class="idx">03 / REVIEW</span>
-            <h3>复习状态持久化</h3>
-            <p>未读、已读、待复习、已掌握四种状态与备注写入数据库；没有复习行的新记录默认视为未读。</p>
-            <span class="tag">刷新与重启保留</span>
-          </article>
-          <article class="feature reveal">
-            <span class="idx">04 / SAMPLE</span>
-            <h3>合成教学样例</h3>
-            <p>一键导入 10 条中英文样例，覆盖数据库、分布式、研究方法等主题。全部明确标注为合成教学数据。</p>
-            <span class="tag">example.com 为占位来源</span>
-          </article>
-          <article class="feature reveal">
-            <span class="idx">05 / EXPORT</span>
-            <h3>Markdown 证据清单</h3>
-            <p>把当前检索结果导出为 Markdown，包含标题、来源链接、页码、标签、状态、备注与相关度；对 example.com / synthetic 来源自动标注“合成教学样例 · 占位来源 · 非真实文献”。</p>
-            <span class="tag">带来源可追溯</span>
-          </article>
-          <article class="feature reveal">
-            <span class="idx">06 / STATUS</span>
-            <h3>连接状态与统计</h3>
-            <p>页面顶部显示真实数据库连接状态，统计面板给出资料总数与各复习状态数量；失败时给出明确错误。</p>
-            <span class="tag">断连不降级</span>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="architecture">
-      <div class="shell">
-        <div class="section-head reveal">
-          <p class="kicker">03 · 技术架构</p>
-          <h2>一条清晰的查询链路：浏览器 → API → 连接池 → seekdb。</h2>
-          <p class="section-lead">
-            后端是 Node.js + Express + mysql2。没有外部模型 API，也没有付费服务；数据库层只创建 <code>odc_qoder_</code> 前缀表。
-          </p>
-        </div>
-        <div class="arch-wrap reveal">
-          <div class="arch-grid" aria-label="数据流架构">
-            <div class="arch-node">
-              <span class="step">01 · Browser</span>
-              <h3>响应式中文界面</h3>
-              <p>录入、检索、状态管理、Markdown 导出，适配桌面与手机。</p>
-            </div>
-            <div class="arch-arrow" aria-hidden="true">→</div>
-            <div class="arch-node">
-              <span class="step">02 · Express</span>
-              <h3>REST API 与校验</h3>
-              <p>服务端类型/长度/URL 校验，统一错误响应，SQL 全部参数绑定。</p>
-            </div>
-            <div class="arch-arrow" aria-hidden="true">→</div>
-            <div class="arch-node">
-              <span class="step">03 · mysql2</span>
-              <h3>连接池</h3>
-              <p>复用数据库连接；连接失败时健康检查与接口明确返回错误。</p>
-            </div>
-            <div class="arch-arrow" aria-hidden="true">→</div>
-            <div class="arch-node dark">
-              <span class="step">04 · seekdb</span>
-              <h3>真实全文索引</h3>
-              <p>odc_qoder_excerpts 与 odc_qoder_review_states；FULLTEXT IK 索引。</p>
-            </div>
-          </div>
-
-          <div class="arch-detail">
-            <div class="mini-card">
-              <h4>数据库对象</h4>
-              <ul>
-                <li><code>odc_qoder_excerpts</code>：标题、来源 URL、页码、正文、标签、时间戳</li>
-                <li><code>ft_body (body_text)</code> 与 <code>ft_title (title)</code>：单列 FULLTEXT 索引</li>
-                <li><code>odc_qoder_review_states</code>：状态与备注，按 excerpt_id 唯一关联</li>
-                <li>初始化优先使用 seekdb 支持的 IK；缺少时尝试 BENG；两者都不可用则初始化明确失败</li>
-                <li>不预设 MySQL ngram，也不会悄悄退回假数据或内存存储</li>
-              </ul>
-            </div>
-            <div class="mini-card">
-              <h4>检索路径</h4>
-              <div class="query-block"><code><span class="hl">WHERE</span> MATCH(e.body_text) AGAINST(? IN NATURAL LANGUAGE MODE)
-   <span class="hl">OR</span> MATCH(e.title) AGAINST(? IN NATURAL LANGUAGE MODE)
-<span class="hl">ORDER BY</span> title_score * 2 + body_score DESC</code></div>
-              <p style="margin:10px 0 0;color:var(--muted);font-size:0.82rem;line-height:1.75;">
-                两个单列 MATCH 条件与两个单列索引一一对应，避免“索引列集合不匹配”的错误。
-              </p>
-            </div>
-          </div>
-
-          <div class="callout">
-            <span aria-hidden="true">✓</span>
-            <div><strong>真实数据库验证：</strong>在本机 seekdb 5.7.25-OceanBase seekdb-v1.4.0.0 上实测，IK 解析器同时命中中文与英文查询；BENG 命中英文；最终索引使用 IK。</div>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="demo">
-      <div class="shell">
-        <div class="section-head reveal">
-          <p class="kicker">04 · 真实运行</p>
-          <h2>这些截图来自本机真实应用，不是设计稿。</h2>
-          <p class="section-lead">
-            应用运行在 http://127.0.0.1:18748，连接本机 seekdb。截图中的样例条目都带有“合成样例·占位来源”标记。
-          </p>
-        </div>
-        <div class="demo-note">公开站点内置可运行的在线体验：<a href="demo.html"><b>demo.html —— 检索、录入、复习状态、Markdown 导出均可直接在页面完成</b></a>（演示模式，数据保存在浏览器本地）。以下为连接本机 seekdb 的真实运行截图与测试记录</div>
-        <div class="shot-grid">
-          <figure class="shot reveal">
-            <button type="button" data-lightbox="assets/evidence-list.png" aria-label="放大查看资料列表截图">
-              <img src="assets/evidence-list.png" alt="EvidenceDesk 资料列表页面，顶部有样例数据说明，每条样例带合成样例占位来源标记和未读状态" loading="lazy" width="788" height="2048">
-            </button>
-            <figcaption>
-              <strong>资料列表与合成样例声明</strong>
-              列表顶部明确说明：合成教学样例、example.com 为占位来源、不是真实文献；每条样例带橙色徽标，新记录默认显示“未读”。
-            </figcaption>
-          </figure>
-          <figure class="shot reveal">
-            <button type="button" data-lightbox="assets/evidence-search.png" aria-label="放大查看全文检索结果截图">
-              <img src="assets/evidence-search.png" alt="EvidenceDesk 检索“分布式数据库”的结果，显示相关度评分、来源链接、页码和标签" loading="lazy" width="788" height="1734">
-            </button>
-            <figcaption>
-              <strong>中文全文检索与相关度</strong>
-              搜索“分布式数据库”命中设计样例与 Paxos 样例，结果展示来源、页码、相关度评分与复习状态。
-            </figcaption>
-          </figure>
-        </div>
-
-        <div class="evidence-queries" aria-label="真实检索复现样例">
-          <article class="query-card reveal">
-            <span class="q">分布式数据库</span>
-            <strong>中文查询命中</strong>
-            <p>命中“OceanBase 分布式数据库架构设计”等记录；搜索走 ft_body / ft_title 的 MATCH AGAINST。</p>
-            <span class="score">相关度 0.401</span>
-          </article>
-          <article class="query-card reveal">
-            <span class="q">Paxos</span>
-            <strong>中英混合查询命中</strong>
-            <p>命中“Paxos 共识算法原理与实践”与包含 Paxos 的分布式数据库样例。</p>
-            <span class="score">相关度 0.400</span>
-          </article>
-          <article class="query-card reveal">
-            <span class="q">HttpApiKeyword</span>
-            <strong>HTTP 新增后立即可检索</strong>
-            <p>集成测试通过真实 HTTP 接口保存记录，再调用 /api/search 命中同一条 ID。</p>
-            <span class="score">84/84 测试覆盖</span>
-          </article>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="start">
-      <div class="shell">
-        <div class="section-head reveal">
-          <p class="kicker">05 · 运行与复现</p>
-          <h2>四条命令启动，六个步骤体验完整流程。</h2>
-          <p class="section-lead">默认连接 127.0.0.1:2881 的 test 数据库，root 用户、空密码；连接参数均可通过环境变量覆盖。</p>
-          <div class="demo-note">更快复现：Linux/macOS 在 qoder 目录执行 <span class="mono">bash scripts/bootstrap.sh</span>，一条命令完成「安装并启动 seekdb → 建表与 IK 索引 → 导入样例 → 启动服务」；Windows 执行 <span class="mono">powershell scripts/bootstrap.ps1 -SeekdbExe &lt;seekdb.exe 路径&gt;</span>。免部署体验请直接打开 <a href="demo.html"><b>在线体验</b></a>。</div>
-        </div>
-        <div class="start-grid">
-          <div class="panel reveal">
-            <ol class="step-list">
-              <li><div><strong>安装依赖</strong><span>在项目目录执行 npm install，使用已生成的 package-lock.json。</span></div></li>
-              <li><div><strong>配置数据库</strong><span>复制 .env.example 为 .env；默认值为 seekdb 127.0.0.1:2881 / test / root / 空密码。</span></div></li>
-              <li><div><strong>初始化表与索引</strong><span>执行 npm run db:init，创建 odc_qoder_ 前缀表与 IK FULLTEXT 索引。</span></div></li>
-              <li><div><strong>启动应用</strong><span>执行 npm start，默认只监听 127.0.0.1:18748。</span></div></li>
-              <li><div><strong>体验功能</strong><span>导入合成样例，搜索“分布式数据库”，设置复习状态，导出 Markdown。</span></div></li>
-              <li><div><strong>运行测试</strong><span>执行 npm test，得到 84 项真实 seekdb 集成测试结果。</span></div></li>
-            </ol>
-          </div>
-          <div class="code-card reveal">
-            <div class="code-head">
-              <span>终端 · 项目根目录</span>
-              <button class="copy-btn" type="button" data-copy="quickstart">复制命令</button>
-            </div>
-            <pre id="quickstart"><code><span class="comment"># 1. 安装依赖</span>
-<span class="cmd">npm</span> install
-
-<span class="comment"># 2. 配置连接（可直接使用 .env.example 默认值）</span>
-<span class="cmd">cp</span> .env.example .env
-
-<span class="comment"># 3. 初始化表结构与 FULLTEXT IK 索引</span>
-<span class="cmd">npm</span> run db:init
-
-<span class="comment"># 4. 启动服务（默认 127.0.0.1:18748）</span>
-<span class="cmd">npm</span> start
-
-<span class="comment"># 5. 浏览器打开</span>
-<span class="flag">http://127.0.0.1:18748</span>
-
-<span class="comment"># 6. 运行真实数据库集成测试</span>
-<span class="cmd">npm</span> test</code></pre>
-          </div>
-        </div>
-
-        <div style="margin-top: 30px;">
-          <div class="section-head reveal" style="margin-bottom:18px;">
-            <h3 style="margin:0;font-size:1.15rem;letter-spacing:-0.02em;">样例导入与验证路径</h3>
-          </div>
-          <div class="sample-grid">
-            <article class="sample-step reveal">
-              <span class="n">01</span>
-              <h3>打开“统计”</h3>
-              <p>页面顶部会显示真实数据库连接状态；连接失败会明确提示，不会退回假数据。</p>
-            </article>
-            <article class="sample-step reveal">
-              <span class="n">02</span>
-              <h3>导入合成样例</h3>
-              <p>点击“导入合成教学样例”，写入 10 条中英文教学数据；页面声明 example.com 为占位来源。</p>
-            </article>
-            <article class="sample-step reveal">
-              <span class="n">03</span>
-              <h3>检索与过滤</h3>
-              <p>搜索“分布式数据库”或“Paxos”，按标签与复习状态过滤，查看数据库返回的相关度。</p>
-            </article>
-            <article class="sample-step reveal">
-              <span class="n">04</span>
-              <h3>设置状态并导出</h3>
-              <p>把一条记录设为“已读”或“已掌握”，刷新确认保留；再导出带来源的 Markdown 证据清单。</p>
-            </article>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="section" id="verify">
-      <div class="shell">
-        <div class="section-head reveal">
-          <p class="kicker">06 · 验证结果</p>
-          <h2>84 项集成测试，全部通过。</h2>
-          <p class="section-lead">
-            测试直接连接真实 seekdb，不使用 mock 数据库。覆盖新增、检索命中、状态持久化、注入安全与 HTTP 输入校验。
-          </p>
-        </div>
-        <div class="verify-wrap">
-          <div class="score-card reveal">
-            <span class="label">npm test · integration</span>
-            <div class="big">84<small>/84</small></div>
-            <p>2026-10-27 在本机真实 seekdb 环境执行，0 失败；同日复核追加 3 项相关度一致性回归后共 84 项通过（见 evidence/review-verification-20261027.txt），原始 81 项日志保留在 evidence/verification-tests-20261027.txt。测试结束后只删除本次创建的 ID，测试前的已有记录保持不变（本次为 11 条）。</p>
-            <div class="env-table">
-              <div><span>Node.js</span><strong>v24.19.0</strong></div>
-              <div><span>seekdb</span><strong>5.7.25-OceanBase seekdb-v1.4.0.0</strong></div>
-              <div><span>全文解析器</span><strong>IK（中文/英文均命中）</strong></div>
-              <div><span>应用地址</span><strong>127.0.0.1:18748</strong></div>
-              <div><span>外部模型 API</span><strong>无</strong></div>
-            </div>
-          </div>
-          <div class="test-list reveal">
-            <h3>测试覆盖</h3>
-            <ul>
-              <li><span class="check" aria-hidden="true">✓</span><span><strong>连接与 Schema：</strong>数据库连接、状态检查、odc_qoder_ 表与 IK 索引验证，确认未使用 ngram。</span></li>
-              <li><span class="check" aria-hidden="true">✓</span><span><strong>CRUD 与默认状态：</strong>新增、读取、列表、删除；没有复习行的新记录默认 unread。</span></li>
-              <li><span class="check" aria-hidden="true">✓</span><span><strong>中英文全文检索：</strong>英文 relevance 命中指定 ID；插入指定中文文本后搜索“分布式数据库”命中同一 ID，并返回正相关度。</span></li>
-              <li><span class="check" aria-hidden="true">✓</span><span><strong>标题索引：</strong>仅标题包含 ZetaKeyword 的记录可通过 ft_title 命中。</span></li>
-              <li><span class="check" aria-hidden="true">✓</span><span><strong>状态持久化：</strong>保存已读/备注，关闭并重新建立连接池后仍能读回。</span></li>
-              <li><span class="check" aria-hidden="true">✓</span><span><strong>过滤与统计：</strong>未读过滤和统计包含没有复习行的记录；标签过滤与检索过滤均生效。</span></li>
-              <li><span class="check" aria-hidden="true">✓</span><span><strong>SQL 注入安全：</strong>恶意标题按原文存储，未执行；注入式搜索查询安全返回。</span></li>
-              <li><span class="check" aria-hidden="true">✓</span><span><strong>真实 HTTP 校验：</strong>空标题、空正文、非法 URL、错误类型、超长输入共 16 类均返回 400；合法数据返回 201 并可被检索。</span></li>
-              <li><span class="check" aria-hidden="true">✓</span><span><strong>Markdown 导出标记：</strong>实际调用导出接口，确认清单顶部与 example.com 条目均带“合成教学样例 · 占位来源 · 非真实文献”，普通来源不被误标。</span></li>
-              <li><span class="check" aria-hidden="true">✓</span><span><strong>数据保护：</strong>测试只清理本次创建的 7 条记录，最终记录数与原有一致。</span></li>
-            </ul>
-          </div>
-        </div>
-
-        <div class="disclaimer-box reveal">
-          <strong>数据与真实性声明</strong>
-          页面中的 10 条样例均为合成教学样例，example.com 为占位来源，不是真实文献、真实论文内容或真实用户数据。
-          应用不使用假数据库或仅内存存储；数据库断连时会明确报错，不会悄悄降级。公开介绍站为静态页面，不连接本地数据库。
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <footer class="closing">
-    <div class="shell closing-inner">
+  <!-- Hero -->
+  <div class="hero">
+    <div class="wrap hero-grid">
       <div>
-        <h2>研读档案 EvidenceDesk</h2>
-        <p>把摘录、来源、检索与复习放在同一个证据工作台里。真实 seekdb FULLTEXT，真实测试，清晰声明。</p>
+        <span class="eyebrow">2026 OceanBase 数据库比赛 · Qoder 赛道</span>
+        <h1>
+          把资料变成<br />会提醒你复习的<em>索引</em>
+          <span class="latin">PAGETRAIL</span>
+        </h1>
+        <p class="lead">
+          笔记、实验记录、论文卡片散在不同文件夹里，关键词还对不上你记得的说法。页迹把它们放进一个本地索引：一次查询同时跑全文与向量，每条结果都带资料名和页码；读完随手评分，到期的摘录会自己浮上来。
+        </p>
+        <ul class="chips">
+          <li>seekdb 嵌入式</li>
+          <li>完全离线</li>
+          <li>一条命令验证</li>
+          <li>Windows / Linux / macOS(arm64)</li>
+        </ul>
+        <div class="cta">
+          <a class="btn btn-primary" href="#run">按运行说明跑一遍</a>
+          <a class="btn btn-ghost" href="https://github.com/caibolol/ODC_PowerContext/tree/2026-competition-ecosystem-pagetrail/qoder" target="_blank" rel="noreferrer">查看源码</a>
+        </div>
       </div>
-      <div class="meta">
-        <div><strong>OceanBase 数据库大赛</strong> · Qoder 赛道</div>
-        <div>Node.js + Express + mysql2 + seekdb</div>
-        <div><a href="https://github.com/caibolol/ODC_PowerContext/tree/2026-competition-ecosystem/qoder" target="_blank" rel="noopener noreferrer">GitHub 源码仓库</a></div>
-        <div>参赛者（Qoder辅助开发） · <span id="year">2026</span></div>
+
+      <div class="card-stack" aria-hidden="true">
+        <div class="card">
+          <div class="card-label">检索结果 · 第 1 条</div>
+          <h3>分布式数据库课程笔记</h3>
+          <div class="meta">课程笔记 · 第 4 讲 · 第 1 页</div>
+          <p><mark>Paxos</mark> 协议通过<mark>两阶段投票</mark>让多个副本对同一个提案达成一致：prepare 阶段收集承诺，accept 阶段提交提案。</p>
+          <div class="tags"><span>共识算法</span><span>p-db-1</span><span>mixed · RRF</span></div>
+          <div class="grade-row"><span>熟练</span><span class="on">一般</span><span>吃力</span></div>
+        </div>
+        <div class="card"></div>
       </div>
     </div>
-  </footer>
+  </div>
 
-  <dialog class="lightbox" id="lightbox" aria-label="截图预览">
-    <button class="lightbox-close" type="button" id="lightboxClose" aria-label="关闭截图预览">×</button>
-    <img id="lightboxImage" src="" alt="">
-  </dialog>
+  <div class="stats">
+    <div class="stats-inner">
+      <div class="stat"><b>16</b><span>段摘录入库</span></div>
+      <div class="stat"><b>4</b><span>份资料来源</span></div>
+      <div class="stat"><b>3</b><span>检索通道</span></div>
+      <div class="stat"><b>12</b><span>项自检</span></div>
+      <div class="stat"><b>20</b><span>个单元测试</span></div>
+      <div class="stat"><b>0</b><span>个外部服务</span></div>
+    </div>
+  </div>
 
-  <script>
-    (function () {
-      var navToggle = document.querySelector('.nav-toggle');
-      var navLinks = document.getElementById('navLinks');
+  <!-- 01 问题 -->
+  <section id="problem">
+    <div class="wrap reveal">
+      <div class="sec-head">
+        <span class="sec-no">01</span>
+        <h2>问题：资料在，但找不回来</h2>
+        <p>这不是"缺少一个更强的搜索框"，而是资料、入口和复习节奏三件事同时断了。</p>
+      </div>
+      <div class="grid-3">
+        <div class="panel">
+          <span class="num">资料分散</span>
+          <h3>同一件事写在三个地方</h3>
+          <p>课程笔记记概念，实验记录记参数，论文卡片记别人的结论。真正需要时，你得挨个文件夹翻，还未必想起当时用的是哪个词。</p>
+          <div class="quote">"副本一致性" 还是 "replica consistency"？</div>
+        </div>
+        <div class="panel">
+          <span class="num">关键词对不上</span>
+          <h3>只搜字面，搜不到意思</h3>
+          <p>纯关键词检索要求你记得原句；纯向量检索又会返回"看起来相关"却不含关键词的段落。单用一路，结果总有一边是偏的。</p>
+          <div class="quote">全文 Top-1 ≠ 向量 Top-1</div>
+        </div>
+        <div class="panel">
+          <span class="num">读完就忘</span>
+          <h3>没有复习节奏</h3>
+          <p>划了重点、写进笔记，然后再也没打开过。资料的价值取决于第二次、第三次被看见，而现在没有任何机制把旧内容重新推到你面前。</p>
+          <div class="quote">到期队列：今天 0 条，明天 3 条</div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-      if (navToggle && navLinks) {
-        navToggle.addEventListener('click', function () {
-          var open = navLinks.classList.toggle('open');
-          navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-        });
-        navLinks.addEventListener('click', function (event) {
-          if (event.target.closest('a')) {
-            navLinks.classList.remove('open');
-            navToggle.setAttribute('aria-expanded', 'false');
-          }
-        });
+  <!-- 02 功能 -->
+  <section id="features">
+    <div class="wrap reveal">
+      <div class="sec-head">
+        <span class="sec-no">02</span>
+        <h2>它怎么解决</h2>
+        <p>四个功能共用一份数据：检索结果就是复习对象，复习状态就写在检索到的同一行记录上。</p>
+      </div>
+      <div class="grid-2">
+        <div class="panel">
+          <span class="num">功能一</span>
+          <h3>三通道检索，一个入口</h3>
+          <p>全文（<span class="inline">$contains</span>）、向量（余弦）、混合（RRF 融合）。界面上可以直接切换通道，看到同一句话在三路下排出的不同顺序。</p>
+        </div>
+        <div class="panel">
+          <span class="num">功能二</span>
+          <h3>每条结果都带出处</h3>
+          <p>结果卡片上固定显示资料名、资料类型、第几讲、第几页，并高亮命中的词。你不用再猜这句话到底出自哪里。</p>
+        </div>
+        <div class="panel">
+          <span class="num">功能三</span>
+          <h3>结构化过滤</h3>
+          <p>把查询限定在某一份资料或某一个主题内，过滤条件由 seekdb 的元数据查询执行，而不是取回结果后再筛。</p>
+        </div>
+        <div class="panel">
+          <span class="num">功能四</span>
+          <h3>复习排程写回同一行</h3>
+          <p>对结果点"熟练 / 一般 / 吃力"，按简化 SM-2 算出下次到期日并写回记录的元数据；复习队列按到期日过滤，另起进程也能读回。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 03 seekdb -->
+  <section id="seekdb">
+    <div class="wrap reveal">
+      <div class="sec-head">
+        <span class="sec-no">03</span>
+        <h2>seekdb 在功能里做了什么</h2>
+        <p>数据库不是"顺手存一下"，检索、过滤、状态回写三件事都由 seekdb 完成。</p>
+      </div>
+
+      <div class="seekdb-grid">
+        <div>
+          <ul class="points">
+            <li>
+              <span class="dot">1</span>
+              <div>
+                <b>一个 collection 同时存正文、向量索引、全文索引和元数据</b>
+                <p>摘录正文与 <span class="inline">doc_id / title / source / page / topic</span> 以及复习状态字段放在同一行，检索与复习不需要跨表关联。</p>
+              </div>
+            </li>
+            <li>
+              <span class="dot">2</span>
+              <div>
+                <b>一次 hybrid_search 完成两路召回 + RRF 融合</b>
+                <p>全文分支走 <span class="inline">where_document.$contains</span>，向量分支走 <span class="inline">query_texts</span>，seekdb 内部按 RRF 合并并返回统一排序。</p>
+              </div>
+            </li>
+            <li>
+              <span class="dot">3</span>
+              <div>
+                <b>元数据过滤与状态回写</b>
+                <p><span class="inline">$and / $in / $lte</span> 负责"限定资料 + 限定主题"和"到期队列"；评分结果用 <span class="inline">update</span> 写回同一行的元数据，换一个进程仍能读回。</p>
+              </div>
+            </li>
+          </ul>
+
+          <div class="code-block" style="margin-top:1.4rem">
+            <button class="copy" type="button" data-copy="#code-hybrid">复制</button>
+            <pre id="code-hybrid"><span class="cm"># pagetrail/library.py —— 一次调用同时走全文与向量</span>
+result = collection.hybrid_search(
+    query={<span class="s">"where_document"</span>: {<span class="s">"$contains"</span>: query}, <span class="s">"n_results"</span>: 4},
+    knn={<span class="s">"query_texts"</span>: [query], <span class="s">"n_results"</span>: 4,
+         <span class="s">"where"</span>: {<span class="s">"doc_id"</span>: {<span class="s">"$eq"</span>: <span class="s">"doc-db"</span>}}},
+    rank={<span class="s">"rrf"</span>: {}},
+    n_results=4,
+    include=[<span class="s">"documents"</span>, <span class="s">"metadatas"</span>],
+)</pre>
+          </div>
+        </div>
+
+        <div class="channels">
+          <div class="channel-head">
+            <span class="label">查询「学习率震荡」· 三通道实际输出</span>
+            <button class="tab" type="button" data-channel="fulltext" aria-selected="false">全文</button>
+            <button class="tab" type="button" data-channel="vector" aria-selected="false">向量</button>
+            <button class="tab" type="button" data-channel="hybrid" aria-selected="true">混合</button>
+          </div>
+          <div class="channel-body" id="channel-body"></div>
+        </div>
+      </div>
+
+      <div class="evidence panel">
+        <div class="kv">
+          <dt>引擎</dt><dd>seekdb 嵌入式（pyseekdb 1.4.0.post1）</dd>
+          <dt>集合</dt><dd>passages · 16 条摘录 / 4 份资料</dd>
+          <dt>嵌入</dt><dd>pagetrail-local-hash-v1 · 512 维 · 离线确定性</dd>
+          <dt>通道</dt><dd>fulltext($contains) + vector(cosine) + hybrid(RRF)</dd>
+          <dt>真实请求</dt><dd>{"query":{"where_document":{"$contains":"Paxos 两阶段投票"},"n_results":3},"knn":{"query_texts":["Paxos 两阶段投票"],"n_results":3},"rank":{"rrf":{}},"n_results":3}</dd>
+          <dt>耗时</dt><dd>4.6 ms（同一次查询在 seekdb 内的耗时，demo 每次都输出）</dd>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 04 界面 -->
+  <section id="ui">
+    <div class="wrap reveal">
+      <div class="sec-head">
+        <span class="sec-no">04</span>
+        <h2>界面</h2>
+        <p>左侧检索与评分，右侧复习队列与资料库统计；顶部标签可切换全文 / 向量 / 混合通道。</p>
+      </div>
+      <div class="grid-2">
+        <figure class="shot" style="margin:0">
+          <img src="assets/ui-search.png" alt="页迹检索界面：搜索框输入 Paxos 两阶段投票，返回四条结果，每条带资料名、讲义编号、页码、命中词高亮与三档评分按钮；右侧为复习队列与资料库统计。" />
+          <figcaption><b>检索结果：</b>命中词高亮，标签显示主题与摘录编号，右侧"明天到期 3 条"来自 seekdb 的到期过滤。</figcaption>
+        </figure>
+        <figure class="shot" style="margin:0">
+          <img src="assets/ui-channel.png" alt="页迹通道切换界面：同样一条查询在全文、向量、混合三个通道下的排序对比。" />
+          <figcaption><b>通道切换：</b>同一句查询在全文 / 向量 / 混合下的排序差异，混合通道的结果由 RRF 融合得出。</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- 05 运行 -->
+  <section id="run">
+    <div class="wrap reveal">
+      <div class="sec-head">
+        <span class="sec-no">05</span>
+        <h2>运行说明与验证样例</h2>
+        <p>不需要数据库服务、不需要 Docker、不需要任何 API Key；四个命令跑完全部验证。</p>
+      </div>
+
+      <div class="run-grid">
+        <div>
+          <ol class="steps">
+            <li><span>进入 qoder 目录：<code>cd qoder</code></span></li>
+            <li><span>创建虚拟环境：<code>python -m venv .venv</code>，并激活（Windows 用 <code>.venv\Scripts\activate</code>）</span></li>
+            <li><span>安装依赖：<code>pip install -r requirements.txt</code>（首次会安装 pyseekdb 与嵌入式引擎）</span></li>
+            <li><span>运行验证：<code>python demo.py</code>，看到 12/12 通过、退出码 0</span></li>
+          </ol>
+          <p style="font-size:.86rem;color:var(--muted);margin-top:1rem">可选：<code class="inline">python -m pagetrail serve</code> 打开 <code class="inline">http://127.0.0.1:8765</code> 体验图形界面；<code class="inline">python -m unittest discover -s tests</code> 跑 20 个单元测试。</p>
+        </div>
+        <div class="code-block">
+          <button class="copy" type="button" data-copy="#code-run">复制</button>
+          <pre id="code-run"><span class="cm"># Linux / macOS</span>
+cd qoder
+python -m venv .venv &amp;&amp; source .venv/bin/activate
+pip install -r requirements.txt
+python demo.py
+
+<span class="cm"># Windows PowerShell</span>
+cd qoder
+python -m venv .venv; .\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python demo.py</pre>
+        </div>
+      </div>
+
+      <div class="panel" style="margin-top:1.6rem">
+        <table>
+          <caption>验证样例：demo.py 的 12 项自检，每项都对应一条可核对的输出</caption>
+          <thead><tr><th>序号</th><th>检查内容</th><th>结果</th></tr></thead>
+          <tbody>
+            <tr><td>01</td><td>seekdb 嵌入式实例就绪，16 段摘录入库</td><td class="ok">PASS</td></tr>
+            <tr><td>02</td><td>查询「Paxos 两阶段投票」Top-1 命中 p-db-1</td><td class="ok">PASS</td></tr>
+            <tr><td>03</td><td>每条结果都带标题 / 来源 / 页码</td><td class="ok">PASS</td></tr>
+            <tr><td>04</td><td>查询「验证集过拟合」Top-1 命中 p-ml-2</td><td class="ok">PASS</td></tr>
+            <tr><td>05</td><td>全文与向量通道 Top-1 不同（两路确实互补）</td><td class="ok">PASS</td></tr>
+            <tr><td>06</td><td>混合通道 Top-1 命中 p-ml-1</td><td class="ok">PASS</td></tr>
+            <tr><td>07</td><td>混合 Top-3 全部来自两路候选</td><td class="ok">PASS</td></tr>
+            <tr><td>08</td><td>过滤结果全部落在目标资料内</td><td class="ok">PASS</td></tr>
+            <tr><td>09</td><td>资料 + 主题双重过滤同时生效</td><td class="ok">PASS</td></tr>
+            <tr><td>10</td><td>评分写入正确的状态与间隔</td><td class="ok">PASS</td></tr>
+            <tr><td>11</td><td>到期队列按日期过滤正确（今天 0 / 明天 3）</td><td class="ok">PASS</td></tr>
+            <tr><td>12</td><td>另一个进程读到相同的复习状态</td><td class="ok">PASS</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 06 开发记录 -->
+  <section id="record">
+    <div class="wrap reveal">
+      <div class="sec-head">
+        <span class="sec-no">06</span>
+        <h2>Qoder 开发记录</h2>
+        <p>需求拆解、技术选型、编码、调试、验证与文档都在 Qoder 内完成，迭代过程记录在仓库的 DEVELOPMENT.md。</p>
+      </div>
+      <div class="record">
+        <div>
+          <div class="account">
+            <div><span>Qoder 账号</span> nick1693700399</div>
+            <div><span>账号 UID</span> 01a17d35-a7d3-7e86-9df1-a58cbea0c743</div>
+            <div><span>开发环境</span> Windows 11 · Python 3.12</div>
+            <div><span>持续验证</span> GitHub Actions · ubuntu-latest</div>
+          </div>
+        </div>
+        <ul class="log">
+          <li><b>选型：</b>对比 seekdb 的嵌入式、服务端、Docker 三种接法，选择 pyseekdb 嵌入式——评审不需要起服务就能复现。</li>
+          <li><b>嵌入：</b>默认嵌入会联网下载英文 ONNX 模型，改为项目内置的离线确定性哈希嵌入，保证断网环境结果一致。</li>
+          <li><b>调试：</b>先后修复自定义嵌入类未注册、get 与 query 返回结构不一致、update 整块替换元数据三处问题。</li>
+          <li><b>验证：</b>补出 12 项自检与 20 个单元测试；在 Linux 干净环境发现并修复了嵌入式引擎启动时机导致的连接失败。</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap foot-grid">
+    <div>
+      页迹 PageTrail · 2026 OceanBase 数据库比赛 Qoder 赛道作品<br />
+      演示数据为合成教学样例，不涉及真实文献或真实用户数据；配置示例均为占位值，仓库中不含任何凭据。
+    </div>
+    <div class="foot-links">
+      <a href="https://github.com/caibolol/ODC_PowerContext/tree/2026-competition-ecosystem-pagetrail/qoder" target="_blank" rel="noreferrer">代码仓库</a>
+      <a href="https://github.com/caibolol/ODC_PowerContext/blob/2026-competition-ecosystem-pagetrail/qoder/README.md" target="_blank" rel="noreferrer">运行说明</a>
+      <a href="https://github.com/caibolol/ODC_PowerContext/blob/2026-competition-ecosystem-pagetrail/qoder/DEVELOPMENT.md" target="_blank" rel="noreferrer">开发记录</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // 三通道对比：数据取自 demo.py 的真实输出
+  const CHANNELS = {
+    fulltext: {
+      note: "全文通道：只认字面重合，短段落容易靠前",
+      rows: [
+        { src: "机器学习实验记录 · 第 1 页", txt: "<mark>学习率</mark>设为 0.1 时损失<mark>震荡</mark>，降到 0.01 后收敛平稳。" },
+        { src: "机器学习实验记录 · 第 3 页", txt: "梯度下降的步长由学习率控制，动量项可以缓解震荡。" }
+      ]
+    },
+    vector: {
+      note: "向量通道：靠词形相近召回，Top-1 落在了讲梯度的段落",
+      rows: [
+        { src: "机器学习实验记录 · 第 3 页", txt: "梯度下降的步长由学习率控制，动量项可以缓解震荡。" },
+        { src: "机器学习实验记录 · 第 1 页", txt: "<mark>学习率</mark>设为 0.1 时损失<mark>震荡</mark>，降到 0.01 后收敛平稳。" },
+        { src: "文献阅读卡片：检索增强生成 · 第 3 页", txt: "重排序（rerank）用交叉编码器对候选段落重新打分，代价是延迟更高。" }
+      ]
+    },
+    hybrid: {
+      note: "混合通道：RRF 融合两路排名，Top-1 回到最贴题的段落",
+      rows: [
+        { src: "机器学习实验记录 · 第 1 页", txt: "<mark>学习率</mark>设为 0.1 时损失<mark>震荡</mark>，降到 0.01 后收敛平稳。" },
+        { src: "机器学习实验记录 · 第 3 页", txt: "梯度下降的步长由学习率控制，动量项可以缓解震荡。" },
+        { src: "文献阅读卡片：检索增强生成 · 第 3 页", txt: "重排序（rerank）用交叉编码器对候选段落重新打分，代价是延迟更高。" }
+      ]
+    }
+  };
+
+  const body = document.getElementById("channel-body");
+  const tabs = Array.from(document.querySelectorAll(".tab"));
+
+  function renderChannel(name) {
+    const data = CHANNELS[name];
+    body.innerHTML = data.rows.map((row, index) => `
+      <div class="result">
+        <div class="rank">${String(index + 1).padStart(2, "0")}</div>
+        <div>
+          <div class="src">${row.src}</div>
+          <div class="txt">${row.txt}</div>
+        </div>
+      </div>`).join("") + `<p class="channel-note">${data.note}</p>`;
+    tabs.forEach((tab) => tab.setAttribute("aria-selected", String(tab.dataset.channel === name)));
+  }
+
+  tabs.forEach((tab) => tab.addEventListener("click", () => renderChannel(tab.dataset.channel)));
+  renderChannel("hybrid");
+
+  // 复制按钮
+  document.querySelectorAll(".copy").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const target = document.querySelector(button.dataset.copy);
+      const text = target.innerText.replace(/\u00a0/g, " ");
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const area = document.createElement("textarea");
+        area.value = text;
+        document.body.appendChild(area);
+        area.select();
+        document.execCommand("copy");
+        area.remove();
       }
+      button.textContent = "已复制";
+      button.classList.add("done");
+      setTimeout(() => { button.textContent = "复制"; button.classList.remove("done"); }, 1600);
+    });
+  });
 
-      document.querySelectorAll('[data-copy]').forEach(function (button) {
-        button.addEventListener('click', function () {
-          var target = document.getElementById(button.getAttribute('data-copy'));
-          if (!target) return;
-          var text = target.textContent;
-          var done = function () {
-            var old = button.textContent;
-            button.textContent = '已复制';
-            setTimeout(function () { button.textContent = old; }, 1800);
-          };
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(done).catch(function () {});
-          } else {
-            var area = document.createElement('textarea');
-            area.value = text;
-            area.style.position = 'fixed';
-            area.style.opacity = '0';
-            document.body.appendChild(area);
-            area.select();
-            try { document.execCommand('copy'); done(); } catch (e) {}
-            document.body.removeChild(area);
-          }
-        });
-      });
+  // 导航高亮 + 进场动画
+  const links = Array.from(document.querySelectorAll(".nav a"));
+  const sections = links.map((link) => document.querySelector(link.getAttribute("href"))).filter(Boolean);
+  const navObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      links.forEach((link) => link.classList.toggle("active", link.getAttribute("href") === "#" + entry.target.id));
+    });
+  }, { rootMargin: "-45% 0px -50% 0px" });
+  sections.forEach((section) => navObserver.observe(section));
 
-      var lightbox = document.getElementById('lightbox');
-      var lightboxImage = document.getElementById('lightboxImage');
-      var lightboxClose = document.getElementById('lightboxClose');
-
-      document.querySelectorAll('[data-lightbox]').forEach(function (button) {
-        button.addEventListener('click', function () {
-          if (!lightbox || !lightboxImage) return;
-          lightboxImage.src = button.getAttribute('data-lightbox');
-          lightboxImage.alt = button.querySelector('img') ? button.querySelector('img').alt : '';
-          if (typeof lightbox.showModal === 'function') {
-            lightbox.showModal();
-          } else {
-            lightbox.setAttribute('open', '');
-          }
-        });
-      });
-
-      if (lightbox) {
-        lightbox.addEventListener('click', function (event) {
-          if (event.target === lightbox) lightbox.close();
-        });
-      }
-      if (lightboxClose) {
-        lightboxClose.addEventListener('click', function () { lightbox.close(); });
-      }
-
-      if ('IntersectionObserver' in window) {
-        var observer = new IntersectionObserver(function (entries) {
-          entries.forEach(function (entry) {
-            if (entry.isIntersecting) {
-              entry.target.classList.add('visible');
-              observer.unobserve(entry.target);
-            }
-          });
-        }, { threshold: 0.08 });
-        document.querySelectorAll('.reveal').forEach(function (el) { observer.observe(el); });
-      } else {
-        document.querySelectorAll('.reveal').forEach(function (el) { el.classList.add('visible'); });
-      }
-
-      var year = document.getElementById('year');
-      if (year) year.textContent = new Date().getFullYear();
-    })();
-  </script>
+  const revealObserver = new IntersectionObserver((entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) { entry.target.classList.add("in"); revealObserver.unobserve(entry.target); }
+    });
+  }, { threshold: 0.08 });
+  document.querySelectorAll(".reveal").forEach((element) => revealObserver.observe(element));
+</script>
 </body>
 </html>

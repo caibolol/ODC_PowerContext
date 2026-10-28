@@ -1,0 +1,25 @@
+test_callable_with_list (test_pagetrail.EmbeddingTest.test_callable_with_list) ... ok
+test_deterministic (test_pagetrail.EmbeddingTest.test_deterministic) ... ok
+test_normalized (test_pagetrail.EmbeddingTest.test_normalized) ... ok
+test_channels_disagree (test_pagetrail.LibraryTest.test_channels_disagree) ... ok
+test_citation_metadata (test_pagetrail.LibraryTest.test_citation_metadata) ... ok
+test_due_queue (test_pagetrail.LibraryTest.test_due_queue) ... ok
+test_filter_by_doc (test_pagetrail.LibraryTest.test_filter_by_doc) ... ok
+test_filter_by_doc_and_topic (test_pagetrail.LibraryTest.test_filter_by_doc_and_topic) ... ok
+test_fulltext_chinese (test_pagetrail.LibraryTest.test_fulltext_chinese) ... ok
+test_hybrid_records_request (test_pagetrail.LibraryTest.test_hybrid_records_request) ... ok
+test_hybrid_top1 (test_pagetrail.LibraryTest.test_hybrid_top1) ... ok
+test_ingest_count (test_pagetrail.LibraryTest.test_ingest_count) ... ok
+test_rate_updates_state (test_pagetrail.LibraryTest.test_rate_updates_state) ... ok
+test_stats_consistent (test_pagetrail.LibraryTest.test_stats_consistent) ... ok
+test_vector_returns_limit (test_pagetrail.LibraryTest.test_vector_returns_limit) ... ok
+test_state_survives_another_process (test_pagetrail.PersistenceTest.test_state_survives_another_process) ... ok
+test_again_counts_lapse (test_pagetrail.ReviewTest.test_again_counts_lapse) ... ok
+test_first_good (test_pagetrail.ReviewTest.test_first_good) ... ok
+test_interval_grows (test_pagetrail.ReviewTest.test_interval_grows) ... ok
+test_invalid_grade (test_pagetrail.ReviewTest.test_invalid_grade) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 19.294s
+
+OK
