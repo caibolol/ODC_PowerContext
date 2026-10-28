@@ -28,7 +28,8 @@
     modify   +12   -3    E:\OceanBase2026\.workbuddy\memory\MEMORY.md
     create   +65   -0    E:\OceanBase2026\minimax_eco\minimax\verify_platform_record.py
 
-由平台 hunk 重建的代码 SHA-256 : fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4
-交付文件 sample/after/task_service.py SHA-256 : fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4
+由平台 hunk 重建的代码 SHA-256（LF） : fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4
+交付文件 sample/after/task_service.py SHA-256（LF 归一化） : fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4
+交付文件在工作区的原始字节 SHA-256 : fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4
 
 PASS: 平台记录中由本轮 MiniMax 写出的业务代码，与提交的 sample/after/task_service.py 逐字节一致。

@@ -53,10 +53,15 @@ def main():
     if rebuilt is None:
         raise SystemExit('平台记录中没有业务代码文件的改动')
 
+    # 仓库内该文件是 LF；Windows 上 core.autocrlf=true 会把检出的工作区文件转成 CRLF，
+    # 因此比对前统一按 LF 归一化，避免换行符差异造成误判。
+    delivered_raw = DELIVERED.read_bytes()
+    delivered_lf = delivered_raw.replace(b'\r\n', b'\n')
     rebuilt_sha = hashlib.sha256(rebuilt.encode('utf-8')).hexdigest()
-    delivered_sha = hashlib.sha256(DELIVERED.read_bytes()).hexdigest()
-    print('\n由平台 hunk 重建的代码 SHA-256 :', rebuilt_sha)
-    print('交付文件 sample/after/task_service.py SHA-256 :', delivered_sha)
+    delivered_sha = hashlib.sha256(delivered_lf).hexdigest()
+    print('\n由平台 hunk 重建的代码 SHA-256（LF） :', rebuilt_sha)
+    print('交付文件 sample/after/task_service.py SHA-256（LF 归一化） :', delivered_sha)
+    print('交付文件在工作区的原始字节 SHA-256 :', hashlib.sha256(delivered_raw).hexdigest())
     assert rebuilt_sha == delivered_sha, '平台记录与交付文件不一致'
     print('\nPASS: 平台记录中由本轮 MiniMax 写出的业务代码，与提交的 sample/after/task_service.py 逐字节一致。')
 

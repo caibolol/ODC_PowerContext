@@ -118,6 +118,9 @@ modify   +12   -3    ...\.workbuddy\memory\MEMORY.md
 python verify_platform_record.py
 ```
 
+> 换行符说明：该文件在仓库内是 LF。Windows 上 `core.autocrlf=true` 会把检出的工作区文件转成 CRLF，
+> 因此脚本比对前统一按 LF 归一化，并同时打印归一化后与工作区原始字节两个哈希，不会误判。
+
 ## 与更早的 MiniMax API 记录的关系
 
 `evidence/minimax-api/20261028T010349Z-exchange.json` 是更早一次**独立 MiniMax API 调用**（端点 `https://api.minimaxi.com/v1/chat/completions`，模型 `MiniMax-M3`，2 轮，含每轮完整请求、原始回复与测试结果）的真实记录，其产出的代码已另存为 `evidence/minimax-api/20261028T010349Z-task_service.py`（SHA-256 `8b9c31f7af6e8d3b0bfb634f9d1ae9ad9c6c7189d4b02e69ed9693f6ca6fe4f0`）。
