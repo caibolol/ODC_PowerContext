@@ -1,74 +1,74 @@
-# SDD 任务上下文模块
+# SDD 任务上下文模块（MiniMax × seekdb × PowerContext）
 
-输入为项目 ID、任务 ID、来源清单和 PowerContext scope ID；输出为数据库中真实的规格、代码、测试内容、来源路径、SHA-256 和恢复的任务状态。入口为 `context.py`。
+为 AI 开发助手提供“当前有效的规格、要改的代码、要跑的测试和任务进展”，并用 MiniMax 完成一次实际代码修改。
 
-## 当前验证结果
+| 技术 | 在流程中的作用 |
+| --- | --- |
+| seekdb | `sdd_sources` 保存规格、代码、测试原文与 SHA-256；`sdd_entries` 保存规格条目、代码符号、测试用例索引。`context` 的全部结果来自对这两张表的参数绑定查询 |
+| PowerContext | `/v1/scopes` 建立任务边界，`/v1/memory/remember` 保存任务进展与验证结果，`/v1/memory/entries/list` 在模块重启后读回，作为下一次上下文的 `progress` |
+| MiniMax | `minimax_agent.py` 把上下文交给 MiniMax Chat Completions（`https://api.minimaxi.com/v1`，模型 `MiniMax-M3`），写入其返回的代码；测试失败时把失败输出交回 MiniMax 继续修改 |
 
-本地独立实现已完成：相同的 7 项测试在修改前因状态筛选未实现而失败（5 个失败断言），修改后全部通过。真实 seekdb 导入、查询、规格更新重导入、PowerContext 从空状态保存和跨进程读取均已验证。
+## 调用入口（CLI）
 
-MiniMax 正式阶段已完成：先独立完成本地实现，再将完整实现的自然语言描述、数据库上下文和任务要求提供给 MiniMax，原样采用其返回的业务文件并通过同组7项测试。正式阶段一次请求，网页显示11秒。此前探路请求的扩展版代码未采用。详见 DEVELOPMENT.md。新虚拟环境、独立源码副本、空数据库和空PowerContext状态的完整复现也已通过。官方逐项材料索引与复现记录见 [ACCEPTANCE.md](ACCEPTANCE.md)。平台分数以实际评审为准。
+| 命令 | 输入 | 输出 |
+| --- | --- | --- |
+| `python context.py ingest --project P --manifest M` | 清单（来源路径、类别 spec/code/test、关联任务） | 导入的来源数、索引条目数 |
+| `python context.py scope --key K` | 幂等键 | PowerContext `scope_id` |
+| `python context.py context --project P --task T --scope S` | 项目、任务、scope | JSON：`spec_entries`（implement / preserve，含行号与正文）、`code_targets`（文件、符号、行号）、`tests`（功能 / 回归测试用例）、`progress`（已完成、待办、已有验证结果）、`sources`、`query`（实际执行的 SQL、参数、行数） |
+| `python context.py save --scope S --state F` | 任务状态 JSON（`task`、`completed`、`todo`、`tests`） | PowerContext 写入结果 |
+| `python minimax_agent.py --project P --task T --scope S --output F` | 同上，加输出文件 | MiniMax 修改后的文件；`evidence/minimax-api/<时间>-exchange.json` 与 `-change.diff` |
+| `python run_demo.py [--recorded]` | 无 | 完整验证样例；`evidence/run/` 下的步骤日志与上下文 |
 
-## 依赖与启动
+上下文选择方式：规格按 `## <编号> <标题>` 切分为条目；任务编号对应的条目为 implement，同一规格中的其他条目为 preserve（必须保持的原有行为）；implement 条目中以 `` `name(` `` 引用的函数，在代码符号索引中查到需要修改的文件与行号；调用这些函数的测试用例按测试类分为功能测试与回归测试。规格修改后重新 `ingest`，同一编号的条目随之更新，不返回固定答案。
 
-验证环境：Windows、Python 3.12.10、PyMySQL 1.2.0、原生 seekdb 1.4.0.0（`bef66ef2f6dc7b6c046a9af9daafa9b811a9c401`）、PowerContext 源码 `da0cb9c2e945d6363725b3abfc4f40a854bf9d29`。PowerContext 安装版本元数据为 `0.1.dev1+g9db175343`，实际为该源码目录的 editable 安装。项目仅使用公开 HTTP 接口，无推理模型依赖。
+## 依赖与环境
 
-以下命令均在本目录执行。seekdb 二进制由官方构建或从 OceanBase seekdb 对应源码构建获得；数据库服务可以部署在其他机器，配置连接地址即可，无需比赛作者的本地数据。
+已验证：Ubuntu 24.04（GitHub Actions）与 Windows；Python 3.12；PyMySQL 1.2.0；seekdb 官方镜像 `oceanbase/seekdb:latest`（本次 digest `sha256:4db4961869d554313520d6081fca29265ba6da6db7313311bd8acbed771a956b`）；PowerContext 源码提交 `da0cb9c2e945d6363725b3abfc4f40a854bf9d29`（HTTP API）；MiniMax OpenAI 兼容 Chat Completions，模型 `MiniMax-M3`。
 
-```powershell
-python -m venv .venv
-.venv/Scripts/Activate.ps1
+### Linux（推荐，与评审的干净环境一致）
+
+```bash
+cd minimax
+python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 pip install "powercontext[cli,server] @ git+https://github.com/caibolol/ODC_PowerContext.git@da0cb9c2e945d6363725b3abfc4f40a854bf9d29"
-# 在独立终端各启动一个服务
-./start-seekdb.ps1 -SeekdbExe <seekdb.exe的绝对路径>
-./start-powercontext.ps1
+docker run -d --name seekdb -p 2881:2881 oceanbase/seekdb:latest
+export POWERCONTEXT_HOME=$(mktemp -d)        # 空的 PowerContext 状态
+powercontext server run --no-env-file --host 127.0.0.1 --port 18752 &
+export DB_HOST=127.0.0.1 DB_PORT=2881 DB_USER=root DB_PASSWORD= DB_NAME=minimax_sdd PC_URL=http://127.0.0.1:18752
+python run_demo.py --recorded                 # 不调用 MiniMax，使用仓库中记录的 MiniMax 输出
+export MINIMAX_API_KEY=<你的 MiniMax API Key>  # 占位值；可选 MINIMAX_MODEL、MINIMAX_BASE_URL
+python run_demo.py                            # 实时调用 MiniMax 完成修改
 ```
 
-也可按 PowerContext 官方说明先安装对应源码，再在该环境安装 requirements.txt。服务启动需要约数 GB 内存；PowerContext 默认 SQLite 存储任务状态，工程资料存入真实 seekdb。
+seekdb 启动需要约 1 分钟，`run_demo.py` 第一步连接失败时稍候重试。`.github/workflows/minimax-demo.yml`（开发分支 `claude/minimax`）按同样步骤在干净的 GitHub Actions 环境执行。
 
-Windows/Python 3.12 的已验证完整依赖版本另存为 requirements-windows-lock.txt，可用 `pip install -r requirements-windows-lock.txt` 代替上面的两条依赖安装命令。固定PowerContext源码位于参赛仓库的另一分支历史，拉取时使用有该仓库读取权限的GitHub账号；不需要作者的本地源码目录。
+### Windows
 
-连接变量：`DB_HOST=127.0.0.1`、`DB_PORT=18753`、`DB_USER=root`、`DB_PASSWORD=`、`DB_NAME=minimax_sdd`、`PC_URL=http://127.0.0.1:18752`，可选 `PC_TOKEN`。仅开发机回环地址使用无认证默认配置。凭据通过环境变量提供。
+按 `start-seekdb.ps1`（原生 seekdb 二进制）与 `start-powercontext.ps1` 启动服务，连接变量默认 `DB_PORT=18753`、`PC_URL=http://127.0.0.1:18752`，其余命令相同（激活脚本为 `.venv/Scripts/Activate.ps1`）。`requirements-windows-lock.txt` 为 Windows/Python 3.12 完整依赖锁定。
 
-## 样例与复现
+## 验证样例
 
-```powershell
-python verify_sample.py
-python verify_context.py
-```
+任务 TASK-2：给 `list_tasks(tasks, status=None)` 增加 todo/done 筛选（规格 `sample/spec.md#TASK-2`），同时保持 TASK-1 原有行为：不筛选时返回全部任务的副本、保持顺序、不修改输入（`sample/spec.md#TASK-1`）。
 
-第一条验证业务修改前后快照，记录完全相同的测试文件哈希、代码哈希、命令和退出码。第二条从新项目、新 scope、空状态开始，验证真实数据库和状态复用，每次 CLI 都启动新进程。测试生成的临时规格文件在进程结束后清理，仓库中的原始规格不变。每次重跑使用唯一项目和 scope，无需删除既有数据。
+上下文必须包含：
 
-手动操作：
+- 规格：`spec.md#TASK-2`（implement）、`spec.md#TASK-1`（preserve）
+- 代码：`before/task_service.py#list_tasks`
+- 测试：功能测试 `FeatureTests` 的 5 个用例；回归测试 `RegressionTests` 的 2 个用例（`sample/test_task_service.py`）
+- 进展：PowerContext 中该任务最新的已完成、待办与验证结果
 
-```powershell
-python context.py ingest --project taskboard --manifest sample/manifest.json
-python context.py scope --key my-independent-sdd-demo
-# 将上一条返回的 scope_id 填入下面命令
-python context.py context --project taskboard --task TASK-2 --scope <scope_id>
-python context.py save --scope <scope_id> --state <任务状态JSON文件>
-# 退出程序再执行 context，previous_state 包含已保存的任务进展。
-```
+`run_demo.py` 的步骤（每步一个新进程，即模块重启）：导入 → 新 scope 空状态 → 保存起始进展 → 修改前测试（目标功能测试因行为未实现而断言失败，回归测试通过）→ 重启后读取进展并交给 MiniMax → 修改后同一组功能与回归测试全部通过 → 保存验证结果 → 重启后上下文包含该结果 → 追加规格并重新导入后上下文使用新内容。断言任一不满足即以非零退出码结束。
 
-任务状态 JSON 使用 `task`、`completed`、`todo`、`tests` 字段；示例见 evidence/context-restored.json 中 previous_state.entries 的 text。首次 scope 创建时使用自己的独立样例键，同一样例后续重用返回的 scope ID。
+重置：每次运行使用新的项目 ID 与 scope，样例在临时副本中修改，仓库文件不变；需要完全清空时删除 seekdb 中的 `minimax_sdd` 库并使用新的 `POWERCONTEXT_HOME`。
 
-更新 `sample/spec.md` 后重新 ingest，下一次 context 使用更新内容。清单中路径相对清单目录，任务关联显式声明；未知任务报错，不返回固定示例答案。
+原有脚本 `verify_sample.py`（修改前后快照、同一测试文件）与 `verify_context.py`（导入、规格更新、状态复用）仍可单独运行。
 
-## 验证任务
+## 已知限制
 
-任务 TASK-2 给 `list_tasks(tasks, status=None)` 增加 todo/done 筛选。有效规格为 `sample/spec.md#TASK-2`，原有行为为 TASK-1；修改符号为 `sample/before/task_service.py::list_tasks`，最终本地实现为 `sample/after/task_service.py`；功能和回归测试在 `sample/test_task_service.py`。测试文件在两个版本之间保持一致。
+- 规格条目以二级标题编号识别，代码符号与测试用例解析面向 Python。
+- 单个项目的导入应串行执行；连接用户需要建库建表权限。
+- MiniMax 每次生成的代码不必完全相同；仓库保存的是本次实际采用的输出与完整交互记录。
 
-示例输入 `[{'id':1},{'id':2,'status':'DONE'}]`，筛选 `' done '` 返回第二条，筛选 todo 返回第一条，不传筛选返回全部任务的列表副本。无效筛选即使输入为空也抛 ValueError。输入记录的 status（若存在）应为字符串；筛选参数为字符串或 None。
-
-## 一页技术说明
-
-1. `ingest` 读取清单内真实文件，验证路径，计算哈希，然后事务替换该项目的 seekdb 索引。删除的来源不会残留在下一轮结果中。
-2. `context` 参数绑定查询项目记录，再按清单 task ID 选择相关来源；显式任务映射适合小型可验收工程，没有使用向量模型。查询文本、参数及实际行数随输出保存。
-3. PowerContext 使用 `/v1/scopes` 建立独立样例边界，`/v1/memory/remember` 保存进展，`/v1/memory/entries/list` 恢复状态。恢复值直接进入下一轮开发上下文。
-4. MiniMax 已通过官方网页端接收完整实现描述、实际检索上下文和验收要求，生成最终业务代码。正式输入、原始回复、代码差异和后续测试均已保留，正式请求为一次。
-
-证据：`evidence/tests.json`、`evidence/integration.json`、`evidence/context-initial.json`、`evidence/context-restored.json`、`evidence/state-write.json`、`evidence/minimax-request.txt`、`evidence/minimax-response.py`、`evidence/final-change.diff`。本地先行实现另存于 `evidence/local-task_service.py`。这些是本地运行证据，不是平台评分。
-
-限制：单项目导入应串行执行；来源按任务映射选择，没有语义召回；不处理任意语言的符号解析；已配置用户需具备建库建表权限。未实施网站或完整 Agent 框架。
-
-依赖来源：[PowerContext](https://github.com/oceanbase/powercontext)、[seekdb](https://github.com/oceanbase/seekdb)、[PyMySQL](https://github.com/PyMySQL/PyMySQL)。本目录的模块和合成任务样例为本次编写，未复制第三方业务代码。
+技术说明见 [TECHNICAL.md](TECHNICAL.md)，开发记录见 [DEVELOPMENT.md](DEVELOPMENT.md)，验收项与证据对照见 [ACCEPTANCE.md](ACCEPTANCE.md)。
+依赖来源：[PowerContext](https://github.com/oceanbase/powercontext)、[seekdb](https://github.com/oceanbase/seekdb)、[PyMySQL](https://github.com/PyMySQL/PyMySQL)；样例业务代码为本次编写。

@@ -1,17 +1,13 @@
-# 本文件由 Mavis 依据已确认的完整实现规格生成（收到完整实现描述后参与代码生成）。
-"""任务服务：按状态筛选任务列表（TASK-2）。"""
-
-
 def list_tasks(tasks, status=None):
-    """返回状态匹配 status 的任务副本；status 为 None 时原样返回全部任务。"""
-    # 无筛选条件：返回列表副本，保持原顺序，不修改输入
     if status is None:
         return list(tasks)
 
-    # 规范化筛选参数并校验，无效状态先报错（即使 tasks 为空）
-    normalized = status.strip().casefold()
-    if normalized not in {"todo", "done"}:
-        raise ValueError(f"Invalid status: {status!r}, expected 'todo' or 'done'")
+    normalized_status = status.strip().casefold()
+    if normalized_status not in ("todo", "done"):
+        raise ValueError("status must be either 'todo' or 'done'")
 
-    # 逐条取记录状态做 casefold 比较（不做 strip），保持顺序且不修改原列表或字典
-    return [task for task in tasks if task.get("status", "todo").casefold() == normalized]
+    return [
+        task
+        for task in tasks
+        if task.get("status", "todo").casefold() == normalized_status
+    ]
