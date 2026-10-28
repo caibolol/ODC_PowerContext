@@ -25,13 +25,18 @@ SPEC_HEADING = re.compile(r'^##\s+([A-Za-z][\w.-]*-\d+)\s*(.*)$')
 SPEC_SYMBOL = re.compile(r'`([A-Za-z_]\w*)\(')
 
 
+# PowerContext 在本机运行，必须直连：环境里若设置了 http_proxy / HTTPS_PROXY，
+# urllib 默认会把 127.0.0.1 的请求也发给代理，导致连接失败或拿到代理的 502。
+PC_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
 def pc(path, payload):
     base = os.getenv('PC_URL', 'http://127.0.0.1:18752').rstrip('/')
     headers = {'Content-Type': 'application/json'}
     if os.getenv('PC_TOKEN'):
         headers['Authorization'] = 'Bearer ' + os.environ['PC_TOKEN']
     request = urllib.request.Request(base + path, json.dumps(payload).encode(), headers)
-    with urllib.request.urlopen(request, timeout=30) as response:
+    with PC_OPENER.open(request, timeout=30) as response:
         return json.load(response)
 
 

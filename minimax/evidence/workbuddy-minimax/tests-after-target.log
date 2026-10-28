@@ -1,0 +1,10 @@
+test_done (test_task_service.FeatureTests.test_done) ... ok
+test_empty_filtered (test_task_service.FeatureTests.test_empty_filtered) ... ok
+test_invalid (test_task_service.FeatureTests.test_invalid) ... ok
+test_no_mutation (test_task_service.FeatureTests.test_no_mutation) ... ok
+test_normalization_and_default (test_task_service.FeatureTests.test_normalization_and_default) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.001s
+
+OK

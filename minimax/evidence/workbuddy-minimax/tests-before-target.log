@@ -1,0 +1,71 @@
+test_done (test_task_service.FeatureTests.test_done) ... FAIL
+test_empty_filtered (test_task_service.FeatureTests.test_empty_filtered) ... ok
+test_invalid (test_task_service.FeatureTests.test_invalid) ... 
+  test_invalid (test_task_service.FeatureTests.test_invalid) (value='') ... FAIL
+  test_invalid (test_task_service.FeatureTests.test_invalid) (value='pending') ... FAIL
+  test_invalid (test_task_service.FeatureTests.test_invalid) (value='   ') ... FAIL
+test_no_mutation (test_task_service.FeatureTests.test_no_mutation) ... ok
+test_normalization_and_default (test_task_service.FeatureTests.test_normalization_and_default) ... FAIL
+
+======================================================================
+FAIL: test_done (test_task_service.FeatureTests.test_done)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\OceanBase2026\minimax_eco\minimax\sample\test_task_service.py", line 20, in test_done
+    self.assertEqual(list_tasks(rows, 'done'), [rows[1]])
+AssertionError: Lists differ: [{'id': 1}, {'id': 2, 'status': 'DONE'}, {'id': 3, 'status': ' DONE '}] != [{'id': 2, 'status': 'DONE'}]
+
+First differing element 0:
+{'id': 1}
+{'id': 2, 'status': 'DONE'}
+
+First list contains 2 additional elements.
+First extra element 1:
+{'id': 2, 'status': 'DONE'}
+
+- [{'id': 1}, {'id': 2, 'status': 'DONE'}, {'id': 3, 'status': ' DONE '}]
++ [{'id': 2, 'status': 'DONE'}]
+
+======================================================================
+FAIL: test_invalid (test_task_service.FeatureTests.test_invalid) (value='')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\OceanBase2026\minimax_eco\minimax\sample\test_task_service.py", line 28, in test_invalid
+    with self.subTest(value=value), self.assertRaises(ValueError):
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid (test_task_service.FeatureTests.test_invalid) (value='pending')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\OceanBase2026\minimax_eco\minimax\sample\test_task_service.py", line 28, in test_invalid
+    with self.subTest(value=value), self.assertRaises(ValueError):
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid (test_task_service.FeatureTests.test_invalid) (value='   ')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\OceanBase2026\minimax_eco\minimax\sample\test_task_service.py", line 28, in test_invalid
+    with self.subTest(value=value), self.assertRaises(ValueError):
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_normalization_and_default (test_task_service.FeatureTests.test_normalization_and_default)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "E:\OceanBase2026\minimax_eco\minimax\sample\test_task_service.py", line 24, in test_normalization_and_default
+    self.assertEqual(list_tasks(rows, ' ToDo '), rows[:2])
+AssertionError: Lists differ: [{'id': 3}, {'id': 1, 'status': 'TODO'}, {'id': 2, 'status': 'done'}] != [{'id': 3}, {'id': 1, 'status': 'TODO'}]
+
+First list contains 1 additional elements.
+First extra element 2:
+{'id': 2, 'status': 'done'}
+
+- [{'id': 3}, {'id': 1, 'status': 'TODO'}, {'id': 2, 'status': 'done'}]
++ [{'id': 3}, {'id': 1, 'status': 'TODO'}]
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.001s
+
+FAILED (failures=5)

@@ -1,1 +1,4 @@
 .runtime/
+# 仓库根 .gitignore 的 *.log 会排除 evidence 下的测试日志，这里显式保留，
+# 否则文档引用的 tests-*.log 证据不会随提交交付。
+!evidence/**/*.log

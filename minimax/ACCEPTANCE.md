@@ -8,7 +8,7 @@
 
 | 必做项 | 如何复现 | 实际结果 | 证据 |
 | --- | --- | --- | --- |
-| **能够运行** | 按 README「依赖与环境」在干净环境安装依赖、启动 seekdb 与 PowerContext（空状态目录），执行 `python run_demo.py --recorded` | **本地通过**：本机全新 venv（Python 3.12.2）+ 全新 seekdb 数据目录 + 全新 `POWERCONTEXT_HOME`，14 步全部按预期退出，末行 `PASS` | `evidence/run/steps.json`（每步命令、退出码、stdout/stderr）、`evidence/run/summary.json`（run_id `8e36c1133202`、git_revision `b59af2ffe9fe60b61b1e77d805639fc933956ca6`）、`evidence/run/pip-freeze.txt`、`evidence/run/seekdb-build.txt`；另 `evidence/linux-ci/` 为更早一次 Ubuntu 24.04 + seekdb 官方镜像的干净环境运行，`evidence/clean-environment/` 为队员在另一台干净 Windows 机器上的独立复验 |
+| **能够运行** | 按 README「依赖与环境」在干净环境安装依赖、启动 seekdb 与 PowerContext（空状态目录），执行 `python run_demo.py --recorded` | **本地通过**：本机全新 venv（Python 3.12.2）+ 全新 seekdb 数据目录 + 全新 `POWERCONTEXT_HOME`，15 步全部按预期退出，末行 `PASS`（首步 `wait-services` 会先等待 seekdb 与 PowerContext 就绪，不需要手工等待） | `evidence/run/steps.json`（每步命令、退出码、stdout/stderr）、`evidence/run/summary.json`（run_id `69414e298767`、git_revision `a3757c197f37f41e71f4f9d1c733a515e33da8ea`）、`evidence/run/pip-freeze.txt`、`evidence/run/seekdb-build.txt`；另 `evidence/linux-ci/` 为更早一次 Ubuntu 24.04 + seekdb 官方镜像的干净环境运行，`evidence/clean-environment/` 为队员在另一台干净 Windows 机器上的独立复验 |
 | **MiniMax 实际参与** | DEVELOPMENT.md；本轮由 WorkBuddy 中运行的 MiniMax（M3.1 Flash）依据上下文写出 `sample/after/task_service.py` | **本地通过**：有本次任务、送入的上下文文件（含 SHA-256）、模型产出的代码与统一差异，四者一一对应；并有 WorkBuddy 平台自己生成的改动日志可机械复核 | `evidence/workbuddy-minimax/`（`context-before-change.json`、`task_service.py`、`change.diff`、`tests-*.log`、README 为完整开发记录）；`evidence/workbuddy-minimax/platform-record/`（平台会话元数据，模型 ID `minimax-m3.1-flash`；平台改动日志含业务代码逐行 hunk），`python verify_platform_record.py` 复核后重建代码与提交文件 SHA-256 均为 `fc7ab995…`；更早的独立 MiniMax API 记录保留于 `evidence/minimax-api/` |
 | **上下文正确** | `python context.py context --project P --task TASK-2 --scope S`；`run_demo.py` 最后一步追加规格并重新导入 | **本地通过**：输出含 `spec.md#TASK-2`（implement）、`spec.md#TASK-1`（preserve）、`before/task_service.py#list_tasks`、功能测试 5 项与回归测试 2 项；追加规格并重新 `ingest` 后，implement 条目正文出现新增文字（`context-updated.json`） | `evidence/run/context-initial.json`、`context-restored.json`、`context-updated.json`；本轮 `evidence/workbuddy-minimax/context-*.json` |
 | **数据库实际参与** | `context.py` 写入并参数绑定查询 seekdb 的 `sdd_sources` / `sdd_entries` | **本地通过**：每份上下文输出都带 `query.all_queries`，含实际执行的 SQL、参数与返回行数（5 条查询，行数 3/1/1/1/7）；上下文内容即由这些查询结果构造 | 各 `context-*.json` 的 `query.all_queries` 字段 |
@@ -27,6 +27,14 @@
 | 6 | 代码修改有效 | 本地通过 |
 
 六项均为本地通过；**官方评分以平台记录的固定提交为准**。
+
+上表逐项结论由 `verify_acceptance.py` 机械判定，评审可自行运行复核（只读交付目录内的文件，不需要数据库、网络或本机 WorkBuddy 安装；全部通过退出码 0，任一失败为 1）：
+
+```bash
+python verify_acceptance.py
+```
+
+实际输出见 `evidence/run/acceptance-check.txt`（15 项检查全部通过）。
 
 ## 材料索引
 

@@ -14,13 +14,52 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+import urllib.error
+import urllib.request
 import uuid
+
+import pymysql
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / 'evidence' / 'run'
 TARGET_TESTS = ['FeatureTests']          # 目标功能测试（修改前必须失败）
 REGRESSION_TESTS = ['RegressionTests']   # 原有行为回归测试（修改前后都必须通过）
 steps = []
+
+
+def wait_for_services(timeout):
+    """等待 seekdb 与 PowerContext 就绪，返回仍未就绪的服务名列表。
+
+    seekdb 冷启动需要数秒到数十秒（容器内更久），刚起就连接会失败，
+    因此在正式步骤前先等待，避免评审按 README 顺序执行时第一步就报错。
+    """
+    host = os.getenv('DB_HOST', '127.0.0.1')
+    port = int(os.getenv('DB_PORT', '18753'))
+    pc_url = os.getenv('PC_URL', 'http://127.0.0.1:18752').rstrip('/')
+    # 本机服务必须直连，不能走环境里的 HTTP 代理
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    pending = {'seekdb': True, 'PowerContext': True}
+    deadline = time.time() + timeout
+    while any(pending.values()) and time.time() < deadline:
+        if pending['seekdb']:
+            try:
+                pymysql.connect(host=host, port=port, user=os.getenv('DB_USER', 'root'),
+                                password=os.getenv('DB_PASSWORD', ''), connect_timeout=3).close()
+                pending['seekdb'] = False
+            except Exception:
+                pass
+        if pending['PowerContext']:
+            try:
+                opener.open(pc_url + '/openapi.json', timeout=3).read()
+                pending['PowerContext'] = False
+            except urllib.error.HTTPError:
+                pending['PowerContext'] = False   # 服务已有应答，只是该路径不允许
+            except Exception:
+                pass
+        if any(pending.values()):
+            time.sleep(2)
+    return [name for name, waiting in pending.items() if waiting]
 
 
 def git_revision():
@@ -71,6 +110,16 @@ def main():
             work = sample / 'work'
             work.mkdir()
             shutil.copy(sample / 'before' / 'task_service.py', work / 'task_service.py')
+
+            # 0. 等待 seekdb 与 PowerContext 就绪
+            waiting = wait_for_services(int(os.getenv('DEMO_WAIT_TIMEOUT', '180')))
+            steps.append({'step': 'wait-services',
+                          'command': ['(internal)', 'wait for seekdb and PowerContext'],
+                          'exit_code': 1 if waiting else 0,
+                          'stdout': '' if not waiting else f'仍未就绪: {waiting}', 'stderr': ''})
+            print(f'[{"1" if waiting else "0"}] wait-services', flush=True)
+            if waiting:
+                raise SystemExit(f'服务未就绪：{waiting}')
 
             # 1. 导入资料到 seekdb
             summary['ingest'] = step('ingest', [*py, 'ingest', '--project', project, '--manifest', str(manifest)])
