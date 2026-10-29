@@ -1,0 +1,17 @@
+--- a/work/task_service.py
++++ b/sample/after/task_service.py
+@@ -1,2 +1,13 @@
+ def list_tasks(tasks, status=None):
+-    return list(tasks)
++    if status is None:
++        return list(tasks)
++
++    normalized_status = status.strip().casefold()
++    if normalized_status not in ("todo", "done"):
++        raise ValueError("status must be either 'todo' or 'done'")
++
++    return [
++        task
++        for task in tasks
++        if task.get("status", "todo").casefold() == normalized_status
++    ]

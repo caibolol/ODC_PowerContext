@@ -14,12 +14,12 @@
 | --- | --- | --- |
 | `python context.py ingest --project P --manifest M` | 清单（来源路径、类别 spec/code/test、关联任务） | 导入的来源数、索引条目数 |
 | `python context.py scope --key K` | 幂等键 | PowerContext `scope_id` |
-| `python context.py context --project P --task T --scope S` | 项目、任务、scope | JSON：`spec_entries`（implement / preserve，含行号与正文）、`code_targets`（文件、符号、行号）、`tests`（功能 / 回归测试用例）、`progress`（已完成、待办、已有验证结果）、`sources`、`query`（实际执行的 SQL、参数、行数） |
+| `python context.py context --project P --task T --scope S` | 项目、任务、scope | JSON：`spec_entries`（implement / preserve，含行号与正文）、`inactive_spec_entries`（被替代或已废弃的条目及原因）、`code_targets`（文件、符号、行号）、`tests`（功能 / 回归测试用例）、`progress`（已完成、待办、已有验证结果；每条结果带 `validity`=current/stale/unknown 与变化项 `changed`，`needs_reverification`）、`basis`（当前规格/代码/测试版本）、`sources`、`query`（实际执行的 SQL、参数、行数） |
 | `python context.py save --scope S --state F` | 任务状态 JSON（`task`、`completed`、`todo`、`tests`） | PowerContext 写入结果 |
 | `python minimax_agent.py --project P --task T --scope S --output F` | 同上，加输出文件 | MiniMax 修改后的文件；`evidence/minimax-api/<时间>-exchange.json` 与 `-change.diff` |
 | `python run_demo.py [--recorded]` | 无 | 完整验证样例；`evidence/run/` 下的步骤日志与上下文 |
 
-上下文选择方式：规格按 `## <编号> <标题>` 切分为条目；任务编号对应的条目为 implement，同一规格中的其他条目为 preserve（必须保持的原有行为）；implement 条目中以 `` `name(` `` 引用的函数，在代码符号索引中查到需要修改的文件与行号；调用这些函数的测试用例按测试类分为功能测试与回归测试。规格修改后重新 `ingest`，同一编号的条目随之更新，不返回固定答案。
+上下文选择方式：规格按 `## <编号> <标题>` 切分为条目；任务编号对应的条目为 implement，同一规格中的其他条目为 preserve（必须保持的原有行为）；implement 条目中以 `` `name(` `` 引用的函数，在代码符号索引中查到需要修改的文件与行号；调用这些函数的测试用例按测试类分为功能测试与回归测试。规格修改后重新 `ingest`，同一编号的条目随之更新，不返回固定答案。条目正文写 `> 替代：TASK-1` 或 `> 状态：废弃` 时，对应条目不再作为要求下发，列入 `inactive_spec_entries`。保存的验证结果带当时的规格、代码、测试版本，版本变化后标为 stale 并在待办中提示重新验证。
 
 ## 依赖与环境
 
@@ -32,16 +32,17 @@ cd minimax
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 pip install "powercontext[cli,server] @ git+https://github.com/caibolol/ODC_PowerContext.git@da0cb9c2e945d6363725b3abfc4f40a854bf9d29"
-docker run -d --name seekdb -p 2881:2881 oceanbase/seekdb:latest
+docker run -d --name seekdb -p 2881:2881 oceanbase/seekdb@sha256:4db4961869d554313520d6081fca29265ba6da6db7313311bd8acbed771a956b   # 已验证版本；也可用 oceanbase/seekdb:latest
 export POWERCONTEXT_HOME=$(mktemp -d)        # 空的 PowerContext 状态
 powercontext server run --no-env-file --host 127.0.0.1 --port 18752 &
 export DB_HOST=127.0.0.1 DB_PORT=2881 DB_USER=root DB_PASSWORD= DB_NAME=minimax_sdd PC_URL=http://127.0.0.1:18752
+python -B -m unittest -v test_context_units   # 离线单元测试（无需服务）
 python run_demo.py --recorded                 # 不调用 MiniMax，使用仓库中记录的 MiniMax 输出
 export MINIMAX_API_KEY=<你的 MiniMax API Key>  # 占位值；可选 MINIMAX_MODEL、MINIMAX_BASE_URL
 python run_demo.py                            # 实时调用 MiniMax 完成修改
 ```
 
-seekdb 启动需要约 1 分钟，`run_demo.py` 第一步连接失败时稍候重试。`.github/workflows/minimax-demo.yml`（开发分支 `claude/minimax`）按同样步骤在干净的 GitHub Actions 环境执行。
+seekdb 启动需要约 1 分钟，`run_demo.py` 会自动等待 seekdb 与 PowerContext 就绪（`--wait` 秒，默认 300）。`.github/workflows/minimax-demo.yml`（开发分支 `claude/minimax`）按同样步骤在干净的 GitHub Actions 环境执行。
 
 ### Windows
 
@@ -54,19 +55,20 @@ seekdb 启动需要约 1 分钟，`run_demo.py` 第一步连接失败时稍候�
 上下文必须包含：
 
 - 规格：`spec.md#TASK-2`（implement）、`spec.md#TASK-1`（preserve）
-- 代码：`before/task_service.py#list_tasks`
+- 代码：`list_tasks` 符号（`run_demo.py` 中为工作副本 `work/task_service.py#list_tasks`，初始内容即 `before/` 快照；直接用 `sample/manifest.json` 导入时为 `before/task_service.py#list_tasks`）
 - 测试：功能测试 `FeatureTests` 的 5 个用例；回归测试 `RegressionTests` 的 2 个用例（`sample/test_task_service.py`）
-- 进展：PowerContext 中该任务最新的已完成、待办与验证结果
+- 进展：PowerContext 中该任务最新的已完成、待办与验证结果（含是否仍适用于当前版本）
 
-`run_demo.py` 的步骤（每步一个新进程，即模块重启）：导入 → 新 scope 空状态 → 保存起始进展 → 修改前测试（目标功能测试因行为未实现而断言失败，回归测试通过）→ 重启后读取进展并交给 MiniMax → 修改后同一组功能与回归测试全部通过 → 保存验证结果 → 重启后上下文包含该结果 → 追加规格并重新导入后上下文使用新内容。断言任一不满足即以非零退出码结束。
+`run_demo.py` 的步骤（每步一个新进程，即模块重启）：等待服务就绪 → 导入 → 新 scope 空状态 → 保存起始进展 → 修改前测试（目标功能测试因行为未实现而断言失败，回归测试通过）并保存带版本的结果 → 重启后读取进展（修改前结果 current）并交给 MiniMax → 重新导入修改后的代码（修改前结果变为 stale，changed=code）→ 修改后同一组功能与回归测试全部通过 → 保存验证结果 → 重启后上下文包含该结果（current，待办为空）→ 追加规格并重新导入后上下文使用新内容、该结果变为 stale（changed=spec）并提示重新验证 → 新增 TASK-3 声明替代 TASK-1 后，TASK-1 列为已失效、TASK-3 作为 preserve。断言任一不满足即以非零退出码结束。
 
-重置：每次运行使用新的项目 ID 与 scope，样例在临时副本中修改，仓库文件不变；需要完全清空时删除 seekdb 中的 `minimax_sdd` 库并使用新的 `POWERCONTEXT_HOME`。
+重置：每次运行使用新的项目 ID 与 scope，样例在临时副本中修改，仓库文件不变（实时模式的 MiniMax 输出另存为 `evidence/run/minimax-live-task_service.py`，不覆盖 `sample/after`）；需要完全清空时删除 seekdb 中的 `minimax_sdd` 库并使用新的 `POWERCONTEXT_HOME`。
 
 原有脚本 `verify_sample.py`（修改前后快照、同一测试文件）与 `verify_context.py`（导入、规格更新、状态复用）仍可单独运行。
 
 ## 已知限制
 
-- 规格条目以二级标题编号识别，代码符号与测试用例解析面向 Python。
+- 规格条目以二级标题编号识别，替代/废弃需用上述标记显式声明；代码符号与测试用例解析面向 Python。
+- PowerContext 从公开仓库 `caibolol/ODC_PowerContext` 的固定提交安装（该提交为本次验证版本）。
 - 单个项目的导入应串行执行；连接用户需要建库建表权限。
 - MiniMax 每次生成的代码不必完全相同；仓库保存的是本次实际采用的输出与完整交互记录。
 
