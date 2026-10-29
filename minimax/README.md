@@ -20,7 +20,7 @@
 | `python run_demo.py [--recorded]` | 无 | 完整验证样例；证据写入 `evidence/run/<运行编号>/`，成功时另刷新 `evidence/run/` 根目录的「最近一次成功运行」 |
 | `python verify_platform_record.py` | 无 | 由 WorkBuddy 平台改动日志重建本轮 MiniMax 写出的业务代码，并与 `sample/after/task_service.py` 比对（只依赖交付目录内的文件） |
 | `python verify_acceptance.py` | 无 | 交付材料一致性自检：按官方六项必做项逐项判定，全部通过退出码 0，任一失败为 1（只依赖交付目录内的文件） |
-| `python test_tooling.py` | 无 | 工具自身的单测：生成前/生成后的输出校验、测试执行的字节码隔离、模型失败后的修复循环、就绪探测（503 不得判为就绪），以及验收脚本的负例（损坏的成功归档必须被判失败），共 20 项 |
+| `python test_tooling.py` | 无 | 工具自身的单测：生成前/生成后的输出校验、测试执行的字节码隔离、模型失败后的修复循环、就绪探测（503 不得判为就绪），以及验收脚本的负例（损坏的成功归档必须被判失败），共 21 项 |
 
 上下文选择方式：规格按 `## <编号> <标题>` 切分为条目；任务编号对应的条目为 implement，同一规格中的其他条目为 preserve（必须保持的原有行为）；implement 条目中以 `` `name(` `` 引用的函数，在代码符号索引中查到需要修改的文件与行号；调用这些函数的测试用例按测试类分为功能测试与回归测试。规格修改后重新 `ingest`，同一编号的条目随之更新，不返回固定答案。
 
@@ -150,13 +150,15 @@ Windows 版 seekdb 二进制可从 <https://github.com/oceanbase/seekdb/releases
 
 原有脚本 `verify_sample.py`（修改前后快照、同一测试文件）与 `verify_context.py`（导入、规格更新、状态复用）仍可单独运行；`verify_platform_record.py`（平台改动日志与提交代码比对）、`verify_acceptance.py`（六项必做项一致性自检）与 `test_tooling.py`（工具自身单测）也可单独运行。
 
-`verify_acceptance.py` 会对**每一份**声明「成功且为实时调用」的归档逐份核对：首轮请求的提示必须等于该次 `context-before-change` 构造出的提示，每轮的 `code_sha256` 必须能由回复里的代码复算出来，末轮回复代码、`exchange.after_sha256`、归档里的 `task_service.py`、运行摘要的产出摘要必须互相对应，并且要能把归档产出放进交付的那份测试文件里实跑通过。任何一个环节对不上都会指名道姓地报出是哪一次运行、哪一处不一致——旧的成功记录不会掩盖较新归档的损坏。
+`verify_acceptance.py` 会对**每一份**声明「成功且为实时调用」的归档逐份核对：首轮请求的提示必须等于该次 `context-before-change` 构造出的提示，每轮的 `code_sha256` 必须能由回复里的代码复算出来，`exchange.after_sha256` 与运行摘要的 `after_sha256` 都是**必需字段**（缺失、为 None 或空串都判失败），末轮回复代码、这两个摘要、归档里的 `task_service.py` 必须互相对应，并且要能把归档产出放进交付的那份测试文件里实跑通过。任何一个环节对不上都会指名道姓地报出是哪一次运行、哪一处不一致——旧的成功记录不会掩盖较新归档的损坏。
+
+有一类记录是**合法**的：模型某一轮只回了文字、没有给代码块（`code_sha256` 明确记为 `None`），失败输出交回模型后下一轮修正成功。这种归档只要末轮有有效代码、摘要、产出且测试通过，就会被接受；反过来，有代码却缺摘要、摘要为 `None`（而不是字段缺失）、或末轮没有代码，都会被拒绝。
 
 ## 证据目录
 
 | 路径 | 内容 |
 | --- | --- |
-| `evidence/run/` | 每次 `run_demo.py` 的完整步骤日志与上下文输出。**每次运行的证据存在 `evidence/run/<运行编号>/` 下**；`evidence/run/` 根目录是最近一次成功运行的副本（当前为实时调用运行 `0a8e51dde0b5`）。**只有成功**的运行才会刷新根目录，失败运行不会破坏已有成功证据。已跑过的环境：Windows 全新 venv（`5b3abb06746b` 等）、Windows 从零重装（`3729a7adf522`、`2e8d57635521`）、**Docker 容器路径（`3107b6f350ab`、`f6d579e0f14e`，官方镜像 `oceanbase/seekdb:latest`）**、**实时调用（`5b3abb06746b`、`2e8d57635521`、`bd8dc0ba1dce`、`0a8e51dde0b5`）**、**Linux / WSL2 全新克隆（Ubuntu 22.04：`a0e4dce9e43f`、`e652ce859b41` 等；Ubuntu 24.04：`9d19b43b0b8c`；用官方 seekdb 1.4.0 Linux 二进制，其中 `bd8dc0ba1dce` 是 Linux 上的实时调用）**。Python 3.11.18 / 3.12.x 均验证通过。`pip-freeze.txt` 为 Windows 实际依赖，`pip-freeze-linux.txt` / `pip-freeze-docker.txt` 为 Linux / Docker 实际依赖，`seekdb-build.txt` / `linux-environment.txt` / `docker-environment.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` / `acceptance-check-docker.txt` 为 `verify_acceptance.py` 的判定输出 |
+| `evidence/run/` | 每次 `run_demo.py` 的完整步骤日志与上下文输出。**每次运行的证据存在 `evidence/run/<运行编号>/` 下**；`evidence/run/` 根目录是最近一次成功运行的副本（当前为实时调用运行 `78fbec8ada1e`）。**只有成功**的运行才会刷新根目录，失败运行不会破坏已有成功证据。已跑过的环境：Windows 全新 venv（`5b3abb06746b` 等）、Windows 从零重装（`3729a7adf522`、`2e8d57635521`）、**Docker 容器路径（`3107b6f350ab`、`f6d579e0f14e`，官方镜像 `oceanbase/seekdb:latest`）**、**实时调用（`5b3abb06746b`、`2e8d57635521`、`bd8dc0ba1dce`、`0a8e51dde0b5`、`78fbec8ada1e`）**、**Linux / WSL2 全新克隆（Ubuntu 22.04：`a0e4dce9e43f`、`e652ce859b41` 等；Ubuntu 24.04：`9d19b43b0b8c`；用官方 seekdb 1.4.0 Linux 二进制，其中 `bd8dc0ba1dce` 是 Linux 上的实时调用）**。Python 3.11.18 / 3.12.x 均验证通过。`pip-freeze.txt` 为 Windows 实际依赖，`pip-freeze-linux.txt` / `pip-freeze-docker.txt` 为 Linux / Docker 实际依赖，`seekdb-build.txt` / `linux-environment.txt` / `docker-environment.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` / `acceptance-check-docker.txt` 为 `verify_acceptance.py` 的判定输出 |
 | `evidence/workbuddy-minimax/` | 本轮由 WorkBuddy 中运行的 MiniMax（M3.1 Flash）产出最终业务代码的完整开发记录：送入的上下文、产出的代码、统一差异、修改前后测试日志、PowerContext 写入与跨服务重启读回；`platform-record/` 为 WorkBuddy 平台自己生成的会话元数据（模型 ID `minimax-m3.1-flash`）与改动日志 |
 | `evidence/minimax-api/` | 更早一次独立 MiniMax API 调用（模型 `MiniMax-M3`）的真实交互记录与产出代码 |
 | `evidence/reinstall/` | 一次**从零重装**验证的记录：删除旧虚拟环境后按 README 命令从公开源重装、全新数据库与全新 PowerContext 状态目录，各入口与实时调用的结果，以及环境快照与完整依赖 |

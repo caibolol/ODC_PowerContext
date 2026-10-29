@@ -329,6 +329,134 @@ class ReadinessTests(unittest.TestCase):
         self.assertEqual(waiting, ['PowerContext'])
 
 
+def make_delivery_copy(base, keep_dirs=(), cite_dirs=(), cite_revision=None):
+    """复制一份交付目录到临时目录，供验收脚本的负例与组合测试使用。
+
+    keep_dirs 之外的运行归档会被删掉，避免其它归档干扰判定；
+    cite_dirs 里的运行编号会被写进 ACCEPTANCE.md，使「文档引用归档的真实运行记录」
+    这一项仍然成立。所有操作只发生在临时目录里，不碰原始 evidence。
+    """
+    work = base / 'minimax'
+    shutil.copytree(ROOT, work, ignore=shutil.ignore_patterns('__pycache__', '.runtime'))
+    runs = work / 'evidence' / 'run'
+    root_run = json.loads((runs / 'summary.json').read_text(encoding='utf-8'))['run_id']
+    keep = set(keep_dirs) | {root_run}
+    for other in list(runs.iterdir()):
+        if other.is_dir() and other.name not in keep:
+            shutil.rmtree(other)
+    if cite_dirs:
+        revisions = set()
+        for name in cite_dirs:
+            summary_path = runs / name / 'summary.json'
+            if summary_path.is_file():
+                revisions.add(json.loads(summary_path.read_text(encoding='utf-8'))['git_revision'])
+        acceptance = work / 'ACCEPTANCE.md'
+        text = acceptance.read_text(encoding='utf-8')
+        for name in cite_dirs:
+            text = re.sub(r'\b[0-9a-f]{12}\b', name, text)
+        revision = cite_revision or (revisions.pop() if len(revisions) == 1 else None)
+        if revision:
+            text = re.sub(r'\b[0-9a-f]{40}\b', revision, text)
+        acceptance.write_text(text, encoding='utf-8', newline='\n')
+    return work
+
+
+class RecoveryRoundTests(unittest.TestCase):
+    """合法恢复记录：第一轮回复里没有 Python 代码块，第二轮修正成功。
+
+    minimax_agent 允许这种恢复（第一轮 code_sha256=None、测试退出码非 0，
+    失败信息保留），验收脚本必须**接受**这种归档，而不是当成「缺摘要」拒绝掉。
+    这里只模拟 call_minimax；main、子进程里的 unittest 执行、证据写入都是真的。
+    """
+
+    ARCHIVE = '0a0a0a0a0a0a'
+    REVISION = 'f' * 40
+
+    def build_recovery_archive(self, base):
+        """跑真实 main，把产出组装成一份成功 live 归档。"""
+        work = base / 'live'
+        work.mkdir()
+        ctx = fake_ctx()
+        ctx_path = work / 'ctx.json'
+        ctx_path.write_text(json.dumps(ctx, ensure_ascii=False), encoding='utf-8')
+        evidence = work / 'ev'
+        output = work / 'out' / 'task_service.py'
+        output.parent.mkdir()
+        calls = []
+
+        def fake_call(messages, model, base_url, key):
+            calls.append(messages)
+            if len(calls) == 1:
+                content = '我先确认一下需要改哪个函数，稍等。'      # 没有代码块
+            else:
+                content = '```python\n' + NEW_CODE + '```'
+            return ({'model': model, 'messages': messages},
+                    {'id': f'resp-{len(calls)}', 'model': 'MiniMax-M3',
+                     'usage': {'total_tokens': 100},
+                     'choices': [{'message': {'content': content}}]}, 0.01)
+
+        original_call, original_argv = minimax_agent.call_minimax, sys.argv
+        original_key = os.environ.get('MINIMAX_API_KEY')
+        minimax_agent.call_minimax = fake_call
+        sys.argv = ['minimax_agent.py', '--context-file', str(ctx_path), '--output', str(output),
+                    '--evidence-dir', str(evidence)]
+        os.environ['MINIMAX_API_KEY'] = 'dummy'
+        try:
+            minimax_agent.main()
+        finally:
+            minimax_agent.call_minimax, sys.argv = original_call, original_argv
+            if original_key is None:
+                os.environ.pop('MINIMAX_API_KEY', None)
+            else:
+                os.environ['MINIMAX_API_KEY'] = original_key
+
+        self.assertEqual(len(calls), 2, '应实际调用两轮')
+        record = json.loads(sorted(evidence.glob('*-exchange.json'))[0].read_text(encoding='utf-8'))
+        self.assertIsNone(record['rounds'][0]['code_sha256'], '第一轮应没有代码摘要')
+        self.assertEqual(record['rounds'][0]['tests']['exit_code'], 1, '第一轮应是失败')
+        self.assertEqual(record['rounds'][1]['tests']['exit_code'], 0, '第二轮应通过')
+        self.assertTrue(record['rounds'][0]['tests']['output'], '第一轮的失败信息必须保留')
+
+        archive = base / 'archive'
+        archive.mkdir()
+        (archive / '20260101T000000Z-exchange.json').write_text(
+            json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
+        shutil.copyfile(output, archive / 'task_service.py')
+        # steps.json：context-before-change 必须与 main 用的那份上下文一致
+        steps = [
+            {'step': 'context-before-change', 'command': ['(internal)'], 'exit_code': 0,
+             'stdout': json.dumps(ctx, ensure_ascii=False), 'stderr': ''},
+            {'step': 'tests-after-target', 'command': ['(internal)'], 'exit_code': 0,
+             'stdout': '', 'stderr': 'OK'},
+            {'step': 'tests-after-regression', 'command': ['(internal)'], 'exit_code': 0,
+             'stdout': '', 'stderr': 'OK'},
+        ]
+        (archive / 'steps.json').write_text(json.dumps(steps, ensure_ascii=False, indent=2), encoding='utf-8')
+        tests_raw = hashlib.sha256((ROOT / 'sample' / 'test_task_service.py').read_bytes()).hexdigest()
+        tests_lf = hashlib.sha256(
+            (ROOT / 'sample' / 'test_task_service.py').read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+        summary = {'run_id': self.ARCHIVE, 'git_revision': self.REVISION, 'project': 'p',
+                   'task': 'TASK-2', 'minimax': 'live', 'scope_id': 'scp_test',
+                   'before_sha256': record['before_sha256'], 'after_sha256': record['after_sha256'],
+                   'tests_sha256': tests_raw, 'tests_sha256_lf': tests_lf, 'result': 'PASS'}
+        (archive / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2),
+                                               encoding='utf-8')
+        return archive
+
+    def test_recovery_archive_passes_acceptance(self):
+        """合法的「无代码回复 → 修正成功」归档必须通过真实验收入口。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            archive = self.build_recovery_archive(base)
+            work = make_delivery_copy(base / 'copy', keep_dirs=[self.ARCHIVE],
+                                      cite_dirs=[self.ARCHIVE], cite_revision=self.REVISION)
+            shutil.copytree(archive, work / 'evidence' / 'run' / self.ARCHIVE)
+            result = subprocess.run([sys.executable, str(work / 'verify_acceptance.py')],
+                                    cwd=work, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0,
+                             f'合法的恢复归档被拒绝：\n{result.stdout[-3000:]}\n{result.stderr[-800:]}')
+
+
 class AcceptanceNegativeTests(unittest.TestCase):
     """验收脚本自身的负例：损坏的成功归档必须让 verify_acceptance.py 失败。
 
@@ -548,6 +676,89 @@ def fail_last_round_tests(run_dir):
     _save(path, record)
 
 
+def drop_code_sha_field(run_dir):
+    """有代码，却缺 code_sha256 字段——不能冒充合法的「显式 None」。"""
+    path = _exchange_path(run_dir)
+    record = _load(path)
+    record['rounds'][0].pop('code_sha256', None)
+    _save(path, record)
+
+
+def code_sha_none_with_code(run_dir):
+    """有代码，但 code_sha256 被写成 None。"""
+    path = _exchange_path(run_dir)
+    record = _load(path)
+    record['rounds'][0]['code_sha256'] = None
+    _save(path, record)
+
+
+def last_round_without_code(run_dir):
+    """末轮没有产出代码，却声明成功。"""
+    path = _exchange_path(run_dir)
+    record = _load(path)
+    last = record['rounds'][-1]
+    last['response']['choices'][0]['message']['content'] = '我这边没能给出完整代码。'
+    last['code_sha256'] = None
+    last['tests']['exit_code'] = 1
+    _save(path, record)
+
+
+def last_round_code_sha_none(run_dir):
+    """末轮回复里有代码，摘要却是 None。"""
+    path = _exchange_path(run_dir)
+    record = _load(path)
+    record['rounds'][-1]['code_sha256'] = None
+    _save(path, record)
+
+
+def drop_exchange_after(run_dir):
+    """删掉 exchange.after_sha256。"""
+    path = _exchange_path(run_dir)
+    record = _load(path)
+    record.pop('after_sha256', None)
+    _save(path, record)
+
+
+def exchange_after_none(run_dir):
+    """exchange.after_sha256 为 None。"""
+    path = _exchange_path(run_dir)
+    record = _load(path)
+    record['after_sha256'] = None
+    _save(path, record)
+
+
+def exchange_after_empty(run_dir):
+    """exchange.after_sha256 为空字符串。"""
+    path = _exchange_path(run_dir)
+    record = _load(path)
+    record['after_sha256'] = ''
+    _save(path, record)
+
+
+def drop_summary_after(run_dir):
+    """删掉 summary.after_sha256。"""
+    path = run_dir / 'summary.json'
+    summary = _load(path)
+    summary.pop('after_sha256', None)
+    _save(path, summary)
+
+
+def summary_after_none(run_dir):
+    """summary.after_sha256 为 None。"""
+    path = run_dir / 'summary.json'
+    summary = _load(path)
+    summary['after_sha256'] = None
+    _save(path, summary)
+
+
+def summary_after_empty(run_dir):
+    """summary.after_sha256 为空字符串。"""
+    path = run_dir / 'summary.json'
+    summary = _load(path)
+    summary['after_sha256'] = ''
+    _save(path, summary)
+
+
 NEGATIVE_CASES = [
     ('首轮任务 prompt 与上下文不一致', break_first_prompt),
     ('回复中的代码与归档产出对不上', break_reply_code),
@@ -562,6 +773,17 @@ NEGATIVE_CASES = [
     ('缺 usage', remove_usage),
     ('缺产出文件', remove_produced),
     ('声明成功但末轮测试失败', fail_last_round_tests),
+    # ---- 合法恢复记录与必需摘要 ----
+    ('有代码却缺 code_sha256 字段', drop_code_sha_field),
+    ('有代码但 code_sha256 为 None', code_sha_none_with_code),
+    ('末轮没有产出代码却声明成功', last_round_without_code),
+    ('末轮 code_sha256 为 None', last_round_code_sha_none),
+    ('删掉 exchange.after_sha256', drop_exchange_after),
+    ('exchange.after_sha256 为 None', exchange_after_none),
+    ('exchange.after_sha256 为空字符串', exchange_after_empty),
+    ('删掉 summary.after_sha256', drop_summary_after),
+    ('summary.after_sha256 为 None', summary_after_none),
+    ('summary.after_sha256 为空字符串', summary_after_empty),
 ]
 
 

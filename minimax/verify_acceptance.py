@@ -34,6 +34,8 @@ sys.path.insert(0, str(ROOT))
 from minimax_agent import NoCodeBlockError, build_prompt, extract_code  # noqa: E402
 
 results = []
+# 有效的 SHA-256：64 位小写十六进制
+SHA256_RE = re.compile(r'[0-9a-f]{64}')
 
 
 def check(item, name, ok, detail):
@@ -256,26 +258,58 @@ def live_archive_problems(run_dir, summary, local_tests_raw, local_tests_lf):
     if not rounds:
         return [f'{name}: exchange 的 rounds 为空']
 
-    # 1) 每轮都要有响应 ID、usage、代码哈希；并复算该轮的 code_sha256
-    for item in rounds:
+    # 1) 每轮都要有响应 ID、usage；代码摘要分两种情况：
+    #    「本轮没有产出代码」（摘要字段明确为 None）与「有代码但摘要缺失/不符」。
+    for index, item in enumerate(rounds):
         number = item.get('round')
+        is_last = index == len(rounds) - 1
         response = item.get('response') or {}
         if not response.get('id'):
             problems.append(f'{name}: 第 {number} 轮缺响应 ID')
         if not response.get('usage'):
             problems.append(f'{name}: 第 {number} 轮缺 usage')
-        if not item.get('code_sha256'):
-            problems.append(f'{name}: 第 {number} 轮缺 code_sha256')
-            continue
+        content = ''
         try:
-            code = extract_code(response['choices'][0]['message']['content'])
-        except (NoCodeBlockError, KeyError, IndexError, TypeError) as error:
-            problems.append(f'{name}: 第 {number} 轮回复中提取不出代码（{error}）')
+            content = response['choices'][0]['message']['content'] or ''
+        except (KeyError, IndexError, TypeError):
+            content = ''
+        code = None
+        try:
+            code = extract_code(content)
+        except (NoCodeBlockError, KeyError, IndexError, TypeError):
+            code = None
+        if 'code_sha256' not in item:
+            # 字段缺失不能冒充「显式的 None」
+            problems.append(f'{name}: 第 {number} 轮缺 code_sha256 字段')
+            continue
+        recorded = item['code_sha256']
+        if recorded is None:
+            # 合法情况只有一种：本轮确实没有产出代码，且这一轮是失败的非末轮。
+            if code is not None:
+                problems.append(f'{name}: 第 {number} 轮回复里有代码，但 code_sha256 为 None')
+            elif not content.strip():
+                problems.append(f'{name}: 第 {number} 轮回复内容为空，不能当作「本轮没有产出代码」')
+            elif is_last:
+                problems.append(f'{name}: 末轮没有产出代码')
+            else:
+                exit_code = (item.get('tests') or {}).get('exit_code')
+                if exit_code is None:
+                    problems.append(f'{name}: 第 {number} 轮没有产出代码，也没有测试结果')
+                elif exit_code == 0:
+                    problems.append(f'{name}: 第 {number} 轮没有产出代码，测试却通过')
+                elif not (item.get('tests') or {}).get('output'):
+                    problems.append(f'{name}: 第 {number} 轮没有产出代码，且未保留失败信息')
+            continue
+        if not isinstance(recorded, str) or not SHA256_RE.fullmatch(recorded):
+            problems.append(f'{name}: 第 {number} 轮的 code_sha256 不是有效的 SHA-256（{recorded!r}）')
+            continue
+        if code is None:
+            problems.append(f'{name}: 第 {number} 轮记录了代码摘要，但回复里提取不出代码')
             continue
         actual = sha256_text(code)
-        if actual != item['code_sha256']:
+        if actual != recorded:
             problems.append(f'{name}: 第 {number} 轮的 code_sha256 与回复中的代码不符'
-                            f'（记录 {item["code_sha256"][:16]}… / 复算 {actual[:16]}…）')
+                            f'（记录 {recorded[:16]}… / 复算 {actual[:16]}…）')
 
     # 2) 末轮必须测试通过
     last = rounds[-1]
@@ -287,18 +321,29 @@ def live_archive_problems(run_dir, summary, local_tests_raw, local_tests_lf):
     produced = run_dir / 'task_service.py'
     if not produced.is_file():
         problems.append(f'{name}: 缺少产出文件 task_service.py')
-        produced_sha_lf = produced_sha_raw = ''
+        produced_sha_lf = ''
     else:
         produced_sha_lf = sha256_lf(produced)
-        produced_sha_raw = sha256(produced)
 
-    # 4) 末轮回复代码 / exchange 产出摘要 / 归档源码 / summary 产出摘要必须互相对应
+    # 4) 末轮回复代码 / exchange 产出摘要 / 归档源码 / summary 产出摘要必须互相对应。
+    #    两个摘要都是**必需字段**：先确认存在、类型正确、且是有效的 SHA-256，再比内容。
     try:
         last_sha = sha256_text(extract_code(last['response']['choices'][0]['message']['content']))
     except (NoCodeBlockError, KeyError, IndexError, TypeError):
         last_sha = ''
-    exchange_after = exchange.get('after_sha256') or ''
-    summary_after = summary.get('after_sha256') or ''
+    exchange_after = exchange.get('after_sha256')
+    if not isinstance(exchange_after, str) or not SHA256_RE.fullmatch(exchange_after or ''):
+        problems.append(f'{name}: exchange.after_sha256 缺失或不是有效的 SHA-256'
+                        f'（{exchange.get("after_sha256")!r}）')
+        exchange_after = ''
+    summary_after = summary.get('after_sha256')
+    if not isinstance(summary_after, str) or not SHA256_RE.fullmatch(summary_after or ''):
+        problems.append(f'{name}: summary.after_sha256 缺失或不是有效的 SHA-256'
+                        f'（{summary.get("after_sha256")!r}）')
+        summary_after = ''
+    # 口径说明：exchange.after_sha256 与 summary.after_sha256 都是产出那台机器上的
+    # 原始字节摘要（agent 以 newline='\n' 写文件，故为 LF）；归档源码在 Windows 检出后
+    # 会被转成 CRLF，因此与归档源码比较时必须用 **LF 归一化**哈希，不混用两种口径。
     if last_sha and exchange_after and last_sha != exchange_after:
         problems.append(f'{name}: 末轮回复中的代码与 exchange.after_sha256 不符'
                         f'（{last_sha[:16]}… / {exchange_after[:16]}…）')
@@ -306,10 +351,8 @@ def live_archive_problems(run_dir, summary, local_tests_raw, local_tests_lf):
         problems.append(f'{name}: 归档源码与 exchange.after_sha256 不符'
                         f'（LF 归一化 {produced_sha_lf[:16]}… / {exchange_after[:16]}…）')
     if summary_after and exchange_after and summary_after != exchange_after:
-        # summary 记的是产出它那台机器上的原始字节；跨平台只与 LF 归一化形式可比
-        if summary_after not in (produced_sha_lf, produced_sha_raw):
-            problems.append(f'{name}: summary 的产出摘要与 exchange / 归档源码不符'
-                            f'（{summary_after[:16]}…）')
+        problems.append(f'{name}: summary 的产出摘要与 exchange.after_sha256 不符'
+                        f'（{summary_after[:16]}… / {exchange_after[:16]}…）')
 
     # 5) 首轮请求必须就是这次上下文构造出的提示
     ctx, error = context_of_run(run_dir)

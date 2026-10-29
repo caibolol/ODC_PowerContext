@@ -1,18 +1,18 @@
 # 开发记录
 
-本作品有**六份真实**的 MiniMax 开发记录，均可核对：
+本作品有**七份真实**的 MiniMax 开发记录，均可核对：
 
 | 记录 | 模型 / 接入方式 | 产出的代码 | 证据 |
 | --- | --- | --- | --- |
 | **本轮（最终采用）** | WorkBuddy 宿主中运行的 MiniMax M3.1 Flash，模型直接读入会话 | `sample/after/task_service.py`（SHA-256 `fc7ab995…`） | `evidence/workbuddy-minimax/` |
-| **本次实测（实时）** | 独立 MiniMax API 调用，模型 `MiniMax-M3`，2026-10-29 实跑 4 次（Windows 3 次、Linux 1 次；共 7 轮请求） | `evidence/run/5b3abb06746b/task_service.py`（SHA-256 `8b9c31f7…`）、`evidence/run/2e8d57635521/task_service.py`（SHA-256 `7f3785f5…`）、`evidence/run/bd8dc0ba1dce/task_service.py`（SHA-256 `7f3785f5…`）、`evidence/run/0a8e51dde0b5/task_service.py`（SHA-256 `8b9c31f7…`） | 对应的四个 `evidence/run/<运行编号>/` |
+| **本次实测（实时）** | 独立 MiniMax API 调用，模型 `MiniMax-M3`，2026-10-29 实跑 5 次（Windows 4 次、Linux 1 次；共 9 轮请求） | `evidence/run/5b3abb06746b/task_service.py`（SHA-256 `8b9c31f7…`）、`evidence/run/2e8d57635521/task_service.py`（SHA-256 `7f3785f5…`）、`evidence/run/bd8dc0ba1dce/task_service.py`（SHA-256 `7f3785f5…`）、`evidence/run/0a8e51dde0b5/task_service.py`（SHA-256 `8b9c31f7…`）、`evidence/run/78fbec8ada1e/task_service.py`（SHA-256 `8b9c31f7…`） | 对应的五个 `evidence/run/<运行编号>/` |
 | 更早一次（保留） | 独立 MiniMax API 调用，模型 `MiniMax-M3`，2026-10-28 | `evidence/minimax-api/20261028T010349Z-task_service.py`（SHA-256 `8b9c31f7…`） | `evidence/minimax-api/` |
 
-六份产出的**行为一致**（同一份测试文件下 7 项全通过），实际差异见下文「与交付快照的关系」。
+七份产出的**行为一致**（同一份测试文件下 7 项全通过），实际差异见下文「与交付快照的关系」。
 最终业务代码采用本轮 WorkBuddy 的产出。
 
-5 次独立的 MiniMax API 调用（含 2026-10-28 那次）共产出 **2 个互不相同的版本**：
-`8b9c31f7…` 出现 3 次（2026-10-28、`5b3abb06746b`、`0a8e51dde0b5`），
+6 次独立的 MiniMax API 调用（含 2026-10-28 那次）共产出 **2 个互不相同的版本**：
+`8b9c31f7…` 出现 4 次（2026-10-28、`5b3abb06746b`、`0a8e51dde0b5`、`78fbec8ada1e`），
 `7f3785f5…` 出现 2 次（`2e8d57635521`、`bd8dc0ba1dce`）；两版之间只差一行错误提示文案。
 说明模型每次确实重新生成，而不是重放。
 
@@ -57,7 +57,12 @@
 这份记录同时是「模型失败后继续修复、而不是直接中断」的**真实服务证据**：
 两轮的请求、回复、测试输出与退出码都留在 `evidence/run/0a8e51dde0b5/` 里。
 
-四次实时调用都跑同一份测试文件、均为 7 项全通过——
+第 5 次 `78fbec8ada1e`（2026-10-29，Windows）跑在**修复了验收器判定之后**的实现上：
+第 1 轮响应 ID `0732959cb1a84dd5a2791856b4cf4207`（1425 tokens）测试退出码 1，
+失败输出交回模型，第 2 轮响应 ID `073295a62e610acb9195a12ff1d786f5`（2033 tokens）测试退出码 0，
+产出 SHA-256 `8b9c31f7af6e8d3…`。
+
+五次实时调用都跑同一份测试文件、均为 7 项全通过——
 模型确实每次重新生成，正对应官方「不要求模型重新生成完全相同的补丁」。
 
 ### 计数口径
@@ -66,8 +71,8 @@
 - **一次「实时调用」** = 一份 `*-exchange.json` 交互记录（一个时间戳文件）。
 - **一次实时调用内的「轮」** = 一次模型请求；一轮测试失败会把失败输出交回模型再发一轮，
   所以一次调用可能是 1～N 轮。按 `evidence/run/` 的实际归档：
-  `5b3abb06746b` 2 轮、`2e8d57635521` 2 轮、`bd8dc0ba1dce` 1 轮、`0a8e51dde0b5` 2 轮，
-  合计 4 次调用 / 7 轮请求。
+  `5b3abb06746b` 2 轮、`2e8d57635521` 2 轮、`bd8dc0ba1dce` 1 轮、`0a8e51dde0b5` 2 轮、
+  `78fbec8ada1e` 2 轮，合计 5 次调用 / 9 轮请求。
 
 **与交付快照的关系**：本次实时产出与 `sample/after/task_service.py`（WorkBuddy 版）**字节不同**，
 实际相差 3～4 个源码行——局部变量名（`wanted` ↔ `normalized_status`，2 处）、字符串引号风格

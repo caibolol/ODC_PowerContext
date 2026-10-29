@@ -8,13 +8,13 @@
   [PASS] 依赖来自公开仓库
          requirements 与 README 安装命令均指向 oceanbase/powercontext
   [PASS] 验证样例已跑通
-         run_id=0a8e51dde0b5 git_revision=828314d27077210dd09ad40aaa32d92078a12a75 result=PASS
+         run_id=78fbec8ada1e git_revision=c3a2cb4387ab9313ce54e10ef0a77ac4564bbb19 result=PASS
   [PASS] 步骤日志含命令与退出码
          15 步均有 command/exit_code
   [PASS] 验收文档引用归档的真实运行记录
-         文档引用 ['0a8e51dde0b5', '260c4776669a', '2e8d57635521', '3107b6f350ab', '3729a7adf522', '4b71d88cc7fd', '5b3abb06746b', '76cedaa6e337', '8ef54fe34756', '9d19b43b0b8c', 'a0e4dce9e43f', 'afdc946bbe69', 'bd8dc0ba1dce', 'e652ce859b41', 'f6d579e0f14e']，其中 ['0a8e51dde0b5', '260c4776669a', '3107b6f350ab', '4b71d88cc7fd', 'bd8dc0ba1dce', 'f6d579e0f14e'] 在 evidence/run/ 下有归档，且归档的提交号与文档一致
+         文档引用 ['0a8e51dde0b5', '260c4776669a', '2e8d57635521', '3107b6f350ab', '3729a7adf522', '4b71d88cc7fd', '5b3abb06746b', '76cedaa6e337', '78fbec8ada1e', '8ef54fe34756', '9d19b43b0b8c', 'a0e4dce9e43f', 'afdc946bbe69', 'bd8dc0ba1dce', 'cf54b6836b1f', 'e652ce859b41', 'f6d579e0f14e']，其中 ['260c4776669a', '3107b6f350ab', '78fbec8ada1e', 'bd8dc0ba1dce', 'f6d579e0f14e'] 在 evidence/run/ 下有归档，且归档的提交号与文档一致
   [PASS] 最近一次成功运行有归档副本
-         evidence/run/summary.json 的 run_id=0a8e51dde0b5 在归档中
+         evidence/run/summary.json 的 run_id=78fbec8ada1e 在归档中
 
 【2】
   [PASS] 平台记录了本轮模型
@@ -36,9 +36,9 @@
   [PASS] 归档的 summary.json 均可解析
          全部归档的 summary.json 均可解析
   [PASS] 实时成功归档逐份材料自洽
-         共 4 份声明成功且为实时调用的归档（['0a8e51dde0b5', '2e8d57635521', '5b3abb06746b', 'bd8dc0ba1dce']），逐份核对通过；另有 12 份非实时成功归档不参与本项判定
+         共 5 份声明成功且为实时调用的归档（['0a8e51dde0b5', '2e8d57635521', '5b3abb06746b', '78fbec8ada1e', 'bd8dc0ba1dce']），逐份核对通过；另有 13 份非实时成功归档不参与本项判定
   [PASS] 最新实时调用按记录时间选出
-         共 4 份实时成功归档；按 exchange 的 time_utc 排序，最新的是 0a8e51dde0b5（20261029T143534Z）
+         共 5 份实时成功归档；按 exchange 的 time_utc 排序，最新的是 78fbec8ada1e（20261029T151331Z）
   [PASS] 最新实时产出通过交付的同一组业务测试
          把交付的 test_task_service.py 与归档产出放在一起实跑：OK（未要求与交付快照逐字节相同）
 
