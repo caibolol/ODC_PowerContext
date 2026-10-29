@@ -10,7 +10,7 @@ attrs==26.1.0
 Authlib==1.9.1
 beartype==0.23.1
 bracex==3.2
-cachetools==7.2.6
+cachetools==7.2.7
 caio==0.12.10
 certifi==2026.10.23
 cffi==2.1.1
@@ -55,7 +55,7 @@ mcp==1.30.0
 mdurl==0.1.2
 more-itertools==11.2.1
 numpy==2.5.4
-openai==3.40.0
+openai==3.41.0
 openapi-pydantic==0.6.0
 opentelemetry-api==1.45.1
 opentelemetry-sdk==1.45.1
@@ -63,7 +63,7 @@ opentelemetry-semantic-conventions==0.66b1
 packaging==26.3
 pathable==0.6.0
 pfzy==0.3.4
-platformdirs==4.13.6
+platformdirs==4.14.0
 powercontext @ git+https://github.com/caibolol/ODC_PowerContext.git@da0cb9c2e945d6363725b3abfc4f40a854bf9d29
 prometheus_client==0.26.0
 prompt_toolkit==3.0.53
@@ -71,9 +71,9 @@ py-key-value-aio==0.4.6
 pycasbin==2.8.0
 pycparser==3.12
 pydantic==2.14.1
-pydantic-ai-slim==2.62.0
-pydantic-graph==2.62.0
-pydantic-settings==2.16.1
+pydantic-ai-slim==2.63.0
+pydantic-graph==2.63.0
+pydantic-settings==2.16.2
 pydantic_core==2.50.1
 Pygments==2.21.0
 PyJWT==2.15.1
