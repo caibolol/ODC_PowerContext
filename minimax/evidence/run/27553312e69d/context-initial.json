@@ -1,0 +1,151 @@
+{
+  "project": "taskboard-27553312e69d",
+  "task": "TASK-2",
+  "spec_entries": [
+    {
+      "source": "spec.md#TASK-2",
+      "path": "spec.md",
+      "entry_id": "TASK-2",
+      "lines": [
+        6,
+        10
+      ],
+      "title": "状态筛选",
+      "text": "`list_tasks(tasks, status=None)`：status 非 None 时，先 strip().casefold()，\n只允许 todo、done，否则抛出 ValueError。记录中的 status 使用 casefold() 比较，\n缺失 status 的任务视为 todo。筛选后保持顺序，不修改输入。\n输入任务为字典，存在的 status 字段为字符串；筛选参数为字符串或 None。",
+      "role": "implement"
+    },
+    {
+      "source": "spec.md#TASK-1",
+      "path": "spec.md",
+      "entry_id": "TASK-1",
+      "lines": [
+        3,
+        5
+      ],
+      "title": "原有行为",
+      "text": "不传筛选条件时返回全部任务，保持输入顺序，返回列表副本，不修改输入。",
+      "role": "preserve"
+    }
+  ],
+  "code_targets": [
+    {
+      "source": "before/task_service.py#list_tasks",
+      "path": "before/task_service.py",
+      "entry_id": "list_tasks",
+      "lines": [
+        1,
+        2
+      ],
+      "symbol": "list_tasks",
+      "type": "FunctionDef"
+    }
+  ],
+  "tests": {
+    "functional": [
+      "test_task_service.py#FeatureTests.test_done",
+      "test_task_service.py#FeatureTests.test_normalization_and_default",
+      "test_task_service.py#FeatureTests.test_invalid",
+      "test_task_service.py#FeatureTests.test_empty_filtered",
+      "test_task_service.py#FeatureTests.test_no_mutation"
+    ],
+    "regression": [
+      "test_task_service.py#RegressionTests.test_no_filter",
+      "test_task_service.py#RegressionTests.test_empty_unfiltered"
+    ]
+  },
+  "progress": {
+    "completed": [],
+    "todo": [],
+    "verification": [],
+    "source": null
+  },
+  "sources": [
+    {
+      "path": "before/task_service.py",
+      "kind": "code",
+      "tasks": "[\"TASK-2\"]",
+      "content": "def list_tasks(tasks, status=None):\n    return list(tasks)\n",
+      "sha256": "0253b9f71074bdaec7d0967b19c98ecd1b39c2e2746fc793dc222fa5abe8e270"
+    },
+    {
+      "path": "spec.md",
+      "kind": "spec",
+      "tasks": "[\"TASK-2\"]",
+      "content": "# 任务列表规格\n\n## TASK-1 原有行为\n不传筛选条件时返回全部任务，保持输入顺序，返回列表副本，不修改输入。\n\n## TASK-2 状态筛选\n`list_tasks(tasks, status=None)`：status 非 None 时，先 strip().casefold()，\n只允许 todo、done，否则抛出 ValueError。记录中的 status 使用 casefold() 比较，\n缺失 status 的任务视为 todo。筛选后保持顺序，不修改输入。\n输入任务为字典，存在的 status 字段为字符串；筛选参数为字符串或 None。\n",
+      "sha256": "c67fcdfd1179c385abba66c5b921f7a7ba1190fade93bac983f8acac82d8c87b"
+    },
+    {
+      "path": "test_task_service.py",
+      "kind": "test",
+      "tasks": "[\"TASK-2\"]",
+      "content": "import copy\nimport unittest\nfrom task_service import list_tasks\n\n\nclass RegressionTests(unittest.TestCase):\n    def test_no_filter(self):\n        rows = [{'id': 2, 'status': 'done'}, {'id': 1}]\n        result = list_tasks(rows)\n        self.assertEqual(result, rows)\n        self.assertIsNot(result, rows)\n\n    def test_empty_unfiltered(self):\n        self.assertEqual(list_tasks([]), [])\n\n\nclass FeatureTests(unittest.TestCase):\n    def test_done(self):\n        rows = [{'id': 1}, {'id': 2, 'status': 'DONE'}, {'id': 3, 'status': ' DONE '}]\n        self.assertEqual(list_tasks(rows, 'done'), [rows[1]])\n\n    def test_normalization_and_default(self):\n        rows = [{'id': 3}, {'id': 1, 'status': 'TODO'}, {'id': 2, 'status': 'done'}]\n        self.assertEqual(list_tasks(rows, ' ToDo '), rows[:2])\n\n    def test_invalid(self):\n        for value in ('', 'pending', '   '):\n            with self.subTest(value=value), self.assertRaises(ValueError):\n                list_tasks([], value)\n\n    def test_empty_filtered(self):\n        self.assertEqual(list_tasks([], 'done'), [])\n\n    def test_no_mutation(self):\n        rows = [{'id': 1}, {'id': 2, 'status': 'done'}]\n        snapshot = copy.deepcopy(rows)\n        list_tasks(rows, 'todo')\n        self.assertEqual(rows, snapshot)\n\n\nif __name__ == '__main__':\n    unittest.main()\n",
+      "sha256": "d9dad3c12344d83ac7dbac32d7a200fb593f3f1e33b3c5c7b58229b137429190"
+    }
+  ],
+  "previous_state": {
+    "memory": null,
+    "entries": []
+  },
+  "query": {
+    "sql": "SELECT path,kind,tasks,content,sha256 FROM sdd_sources WHERE project_id=%s ORDER BY kind,path",
+    "parameters": [
+      "taskboard-27553312e69d"
+    ],
+    "database_rows": 3,
+    "selected_rows": 3,
+    "all_queries": [
+      {
+        "sql": "SELECT path,kind,tasks,content,sha256 FROM sdd_sources WHERE project_id=%s ORDER BY kind,path",
+        "parameters": [
+          "taskboard-27553312e69d"
+        ],
+        "rows": 3
+      },
+      {
+        "sql": "SELECT path,entry_id,title,body,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id=%s AND path IN (%s,%s,%s)",
+        "parameters": [
+          "taskboard-27553312e69d",
+          "spec",
+          "TASK-2",
+          "before/task_service.py",
+          "spec.md",
+          "test_task_service.py"
+        ],
+        "rows": 1
+      },
+      {
+        "sql": "SELECT path,entry_id,title,body,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id<>%s AND path IN (%s) ORDER BY path,line_start",
+        "parameters": [
+          "taskboard-27553312e69d",
+          "spec",
+          "TASK-2",
+          "spec.md"
+        ],
+        "rows": 1
+      },
+      {
+        "sql": "SELECT path,entry_id,title,line_start,line_end FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id IN (%s) AND path IN (%s,%s,%s) ORDER BY path,line_start",
+        "parameters": [
+          "taskboard-27553312e69d",
+          "code",
+          "list_tasks",
+          "before/task_service.py",
+          "spec.md",
+          "test_task_service.py"
+        ],
+        "rows": 1
+      },
+      {
+        "sql": "SELECT path,entry_id,title,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND path IN (%s,%s,%s) ORDER BY path,line_start",
+        "parameters": [
+          "taskboard-27553312e69d",
+          "test",
+          "before/task_service.py",
+          "spec.md",
+          "test_task_service.py"
+        ],
+        "rows": 7
+      }
+    ]
+  }
+}

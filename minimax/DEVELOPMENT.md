@@ -5,12 +5,12 @@
 | 记录 | 模型 / 接入方式 | 产出的代码 | 证据 |
 | --- | --- | --- | --- |
 | **本轮（最终采用）** | WorkBuddy 宿主中运行的 MiniMax M3.1 Flash，模型直接读入会话 | `sample/after/task_service.py`（SHA-256 `fc7ab995…`） | `evidence/workbuddy-minimax/` |
-| **本次实测（实时）** | 独立 MiniMax API 调用，模型 `MiniMax-M3`，2026-10-29 实跑（两次） | `evidence/run/5b3abb06746b/task_service.py`（SHA-256 `8b9c31f7…`）、`evidence/run/2e8d57635521/task_service.py`（SHA-256 `7f3785f5…`） | `evidence/run/5b3abb06746b/`、`evidence/run/2e8d57635521/` |
+| **本次实测（实时）** | 独立 MiniMax API 调用，模型 `MiniMax-M3`，2026-10-29 实跑（三次：Windows 两次、Linux 一次） | `evidence/run/5b3abb06746b/task_service.py`（SHA-256 `8b9c31f7…`）、`evidence/run/2e8d57635521/task_service.py`（SHA-256 `7f3785f5…`）、`evidence/run/bd8dc0ba1dce/task_service.py`（SHA-256 `7f3785f5…`） | `evidence/run/5b3abb06746b/`、`evidence/run/2e8d57635521/`、`evidence/run/bd8dc0ba1dce/` |
 | 更早一次（保留） | 独立 MiniMax API 调用，模型 `MiniMax-M3`，2026-10-28 | `evidence/minimax-api/20261028T010349Z-task_service.py`（SHA-256 `8b9c31f7…`） | `evidence/minimax-api/` |
 
-四份产出的**行为完全一致**（同一份测试文件下 7 项全通过），只差局部变量名、引号风格与一句错误提示文案；
-最终业务代码采用本轮 WorkBuddy 的产出。三次独立的 MiniMax API 调用中有两次产出了**逐字节相同**的代码，
-第三次（重装环境内）只有一行错误提示文案不同——说明模型每次确实重新生成。
+五份产出的**行为完全一致**（同一份测试文件下 7 项全通过），只差局部变量名、引号风格与一句错误提示文案；
+最终业务代码采用本轮 WorkBuddy 的产出。四次独立的 MiniMax API 调用中有两次产出了**逐字节相同**的代码，
+另两次只有一行错误提示文案不同——说明模型每次确实重新生成。
 
 ## 一、本轮：WorkBuddy 中的 MiniMax 完成代码修改（最终采用）
 

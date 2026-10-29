@@ -2,7 +2,7 @@
   {
     "stage": "before",
     "command": [
-      "E:\\OceanBase2026\\.venvs\\minimax312\\Scripts\\python.exe",
+      "E:\\OceanBase2026\\.venvs\\reinstall312\\Scripts\\python.exe",
       "-B",
       "-m",
       "unittest",
@@ -22,7 +22,7 @@
   {
     "stage": "after",
     "command": [
-      "E:\\OceanBase2026\\.venvs\\minimax312\\Scripts\\python.exe",
+      "E:\\OceanBase2026\\.venvs\\reinstall312\\Scripts\\python.exe",
       "-B",
       "-m",
       "unittest",

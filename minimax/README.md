@@ -129,7 +129,7 @@ Windows 版 seekdb 二进制可从 <https://github.com/oceanbase/seekdb/releases
 
 | 路径 | 内容 |
 | --- | --- |
-| `evidence/run/` | 每次 `run_demo.py` 的完整步骤日志与上下文输出。**每次运行的证据存在 `evidence/run/<运行编号>/` 下**；`evidence/run/` 根目录是最近一次成功运行的副本（当前为实时模式运行 `5b3abb06746b`）。**只有成功**的运行才会刷新根目录，失败运行不会破坏已有成功证据。已跑过的环境：Windows 全新 venv（`5b3abb06746b` 等）、Windows 从零重装（`3729a7adf522`、`2e8d57635521`）、**Linux / WSL2 Ubuntu 22.04 全新克隆（`a0e4dce9e43f`、`e652ce859b41`，用官方 seekdb 1.4.0 Linux 二进制）**。`pip-freeze.txt` 为 Windows 实际依赖，`pip-freeze-linux.txt` 为 Linux 实际依赖，`seekdb-build.txt` / `linux-environment.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` 为 `verify_acceptance.py` 的判定输出 |
+| `evidence/run/` | 每次 `run_demo.py` 的完整步骤日志与上下文输出。**每次运行的证据存在 `evidence/run/<运行编号>/` 下**；`evidence/run/` 根目录是最近一次成功运行的副本（当前为实时模式运行 `5b3abb06746b`）。**只有成功**的运行才会刷新根目录，失败运行不会破坏已有成功证据。已跑过的环境：Windows 全新 venv（`5b3abb06746b` 等）、Windows 从零重装（`3729a7adf522`、`2e8d57635521`）、**Linux / WSL2 Ubuntu 22.04 全新克隆（`a0e4dce9e43f`、`e652ce859b41` 等，用官方 seekdb 1.4.0 Linux 二进制；其中 `bd8dc0ba1dce` 是 Linux 上的实时调用）**。Python 3.11.18 与 3.12.x 均验证通过。`pip-freeze.txt` 为 Windows 实际依赖，`pip-freeze-linux.txt` 为 Linux 实际依赖，`seekdb-build.txt` / `linux-environment.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` 为 `verify_acceptance.py` 的判定输出 |
 | `evidence/workbuddy-minimax/` | 本轮由 WorkBuddy 中运行的 MiniMax（M3.1 Flash）产出最终业务代码的完整开发记录：送入的上下文、产出的代码、统一差异、修改前后测试日志、PowerContext 写入与跨服务重启读回；`platform-record/` 为 WorkBuddy 平台自己生成的会话元数据（模型 ID `minimax-m3.1-flash`）与改动日志 |
 | `evidence/minimax-api/` | 更早一次独立 MiniMax API 调用（模型 `MiniMax-M3`）的真实交互记录与产出代码 |
 | `evidence/reinstall/` | 一次**从零重装**验证的记录：删除旧虚拟环境后按 README 命令从公开源重装、全新数据库与全新 PowerContext 状态目录，各入口与实时调用的结果，以及环境快照与完整依赖 |
