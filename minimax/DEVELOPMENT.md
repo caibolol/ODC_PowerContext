@@ -1,13 +1,15 @@
 # 开发记录
 
-本作品有**两份真实**的 MiniMax 开发记录，均可核对：
+本作品有**三份真实**的 MiniMax 开发记录，均可核对：
 
 | 记录 | 模型 / 接入方式 | 产出的代码 | 证据 |
 | --- | --- | --- | --- |
-| **本轮（最终采用）** | WorkBuddy 宿主中运行的 MiniMax M3.1 Flash，模型直接读入会话 | `sample/after/task_service.py` | `evidence/workbuddy-minimax/` |
-| 更早一次（保留） | 独立 MiniMax API 调用，模型 `MiniMax-M3`，OpenAI 兼容 Chat Completions | `evidence/minimax-api/20261028T010349Z-task_service.py` | `evidence/minimax-api/` |
+| **本轮（最终采用）** | WorkBuddy 宿主中运行的 MiniMax M3.1 Flash，模型直接读入会话 | `sample/after/task_service.py`（SHA-256 `fc7ab995…`） | `evidence/workbuddy-minimax/` |
+| **本次实测（实时）** | 独立 MiniMax API 调用，模型 `MiniMax-M3`，2026-10-29 实跑 | `evidence/run/5b3abb06746b/task_service.py`（SHA-256 `8b9c31f7…`） | `evidence/run/5b3abb06746b/` |
+| 更早一次（保留） | 独立 MiniMax API 调用，模型 `MiniMax-M3`，2026-10-28 | `evidence/minimax-api/20261028T010349Z-task_service.py`（SHA-256 `8b9c31f7…`） | `evidence/minimax-api/` |
 
-两次产出的**行为完全一致**，只差局部变量名与引号风格；最终业务代码采用本轮 WorkBuddy 的产出。
+三份产出的**行为完全一致**（同一份测试文件下 7 项全通过），只差局部变量名与引号风格；
+最终业务代码采用本轮 WorkBuddy 的产出。两次独立的 MiniMax API 调用（相隔一天）产出了**逐字节相同**的代码。
 
 ## 一、本轮：WorkBuddy 中的 MiniMax 完成代码修改（最终采用）
 
@@ -19,6 +21,30 @@
 - **产出**：`sample/after/task_service.py`，SHA-256 `fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4`；差异 `evidence/workbuddy-minimax/change.diff`。
 - **修改前后同组测试**：功能测试修改前 `FAILED (failures=5)`（退出码 1，断言失败），修改后 `OK`（退出码 0）；回归测试前后均 `OK`，两份回归日志逐字节相同（SHA-256 `467ba065cd858b5e033cbfdee32c2a6e4c7cd0d2c9cd13bd2af867a36c0a0b9a`）。测试文件未被修改（SHA-256 `2c01d2de7e49987f1ead4e38a0916f4a7f3bae40dcfcf701d24a171435f899a7`）。
 - **状态复用**：新建 scope 为空 → 写入进展 → 新进程读回 → 写入验证结果 → **杀掉 PowerContext 服务进程后重启服务**再读回，`completed` 3 项、`todo` 空、`verification` 2 组。
+
+## 二、本次实测：实时调用 MiniMax API（2026-10-29）
+
+用真实的 MiniMax API Key 实跑 `python run_demo.py`（实时模式），**15 步全部通过、末行 PASS**。
+完整记录在 `evidence/run/5b3abb06746b/`：
+
+| 项 | 值 |
+| --- | --- |
+| 运行编号 / 结果 | `5b3abb06746b` / `PASS` |
+| 端点 | `https://api.minimaxi.com/v1/chat/completions` |
+| 请求模型 / 回复模型 | `MiniMax-M3` / `MiniMax-M3` |
+| 第 1 轮 | 响应 ID `07324d81471f73c66a09aac4a9095d3a`，1407 tokens，测试退出码 1（功能测试失败） |
+| 第 2 轮 | 响应 ID `07324d87bd9ca30a48c0ae71d254661b`，2039 tokens，测试退出码 0（**7 项全通过**） |
+| 耗时 | 8.88 秒 |
+| 产出代码 | `task_service.py`，SHA-256 `8b9c31f7af6e8d3b0bfb634f9d1ae9ad9c6c7189d4b02e69ed9693f6ca6fe4f0` |
+
+这一轮与 2026-10-28 那次 API 调用（同一模型、同一上下文构造、同一提示）产出了**逐字节相同**的代码，
+且第 1 轮同样栽在「把记录中的 status 也做了 strip」上、第 2 轮同样自行修正——与更早记录的过程完全吻合。
+
+**与交付快照的关系**：本次实时产出与 `sample/after/task_service.py`（WorkBuddy 版）**功能等价、字节不同**，
+差异仅三行（局部变量名 `normalized_status` → `wanted` 与引号风格）。两份代码跑**同一份**测试文件
+（SHA-256 `2c01d2de…`）均为 7 项全通过。`verify_acceptance.py` 的「实时产出与交付快照功能等价」一项会机械核对这一点。
+
+**本次实时运行没有覆盖交付的业务快照**：产出只写入 `evidence/run/5b3abb06746b/`，`sample/after/task_service.py` 保持不变。
 
 ## 二、更早一次：独立 MiniMax API 调用（保留）
 

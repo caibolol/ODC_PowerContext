@@ -1,0 +1,225 @@
+{
+  "project": "taskboard-5b3abb06746b",
+  "task": "TASK-2",
+  "spec_entries": [
+    {
+      "source": "spec.md#TASK-2",
+      "path": "spec.md",
+      "entry_id": "TASK-2",
+      "lines": [
+        6,
+        13
+      ],
+      "title": "状态筛选",
+      "text": "`list_tasks(tasks, status=None)`：status 非 None 时，先 strip().casefold()，\n只允许 todo、done，否则抛出 ValueError。记录中的 status 使用 casefold() 比较，\n缺失 status 的任务视为 todo。筛选后保持顺序，不修改输入。\n输入任务为字典，存在的 status 字段为字符串；筛选参数为字符串或 None。\n\n## TASK-2 规格补充\n更新标记 5b3abb06746b：status 参数也接受 None 以外的空白字符串时报错",
+      "role": "implement"
+    },
+    {
+      "source": "spec.md#TASK-1",
+      "path": "spec.md",
+      "entry_id": "TASK-1",
+      "lines": [
+        3,
+        5
+      ],
+      "title": "原有行为",
+      "text": "不传筛选条件时返回全部任务，保持输入顺序，返回列表副本，不修改输入。",
+      "role": "preserve"
+    }
+  ],
+  "code_targets": [
+    {
+      "source": "before/task_service.py#list_tasks",
+      "path": "before/task_service.py",
+      "entry_id": "list_tasks",
+      "lines": [
+        1,
+        2
+      ],
+      "symbol": "list_tasks",
+      "type": "FunctionDef"
+    }
+  ],
+  "tests": {
+    "functional": [
+      "test_task_service.py#FeatureTests.test_done",
+      "test_task_service.py#FeatureTests.test_normalization_and_default",
+      "test_task_service.py#FeatureTests.test_invalid",
+      "test_task_service.py#FeatureTests.test_empty_filtered",
+      "test_task_service.py#FeatureTests.test_no_mutation"
+    ],
+    "regression": [
+      "test_task_service.py#RegressionTests.test_no_filter",
+      "test_task_service.py#RegressionTests.test_empty_unfiltered"
+    ]
+  },
+  "progress": {
+    "completed": [
+      "导入规格、代码与测试到 seekdb",
+      "MiniMax 依据上下文完成代码修改",
+      "功能测试与回归测试通过"
+    ],
+    "todo": [],
+    "verification": [
+      {
+        "stage": "before",
+        "target_exit": 1,
+        "regression_exit": 0,
+        "code_sha256": "e233a73b2736188e2fe9a8790ca9533a09a4d9dc9ec86110ee17e762a7ded978"
+      },
+      {
+        "stage": "after",
+        "target_exit": 0,
+        "regression_exit": 0,
+        "code_sha256": "8b9c31f7af6e8d3b0bfb634f9d1ae9ad9c6c7189d4b02e69ed9693f6ca6fe4f0",
+        "tests_sha256": "2c01d2de7e49987f1ead4e38a0916f4a7f3bae40dcfcf701d24a171435f899a7"
+      }
+    ],
+    "source": "PowerContext task-progress"
+  },
+  "sources": [
+    {
+      "path": "before/task_service.py",
+      "kind": "code",
+      "tasks": "[\"TASK-2\"]",
+      "content": "def list_tasks(tasks, status=None):\n    return list(tasks)\n",
+      "sha256": "0253b9f71074bdaec7d0967b19c98ecd1b39c2e2746fc793dc222fa5abe8e270"
+    },
+    {
+      "path": "spec.md",
+      "kind": "spec",
+      "tasks": "[\"TASK-2\"]",
+      "content": "# 任务列表规格\n\n## TASK-1 原有行为\n不传筛选条件时返回全部任务，保持输入顺序，返回列表副本，不修改输入。\n\n## TASK-2 状态筛选\n`list_tasks(tasks, status=None)`：status 非 None 时，先 strip().casefold()，\n只允许 todo、done，否则抛出 ValueError。记录中的 status 使用 casefold() 比较，\n缺失 status 的任务视为 todo。筛选后保持顺序，不修改输入。\n输入任务为字典，存在的 status 字段为字符串；筛选参数为字符串或 None。\n\n## TASK-2 规格补充\n更新标记 5b3abb06746b：status 参数也接受 None 以外的空白字符串时报错\n",
+      "sha256": "73c825da8e57b813edb5249faff73ab704af6767caaf6019759b467c2b3b842b"
+    },
+    {
+      "path": "test_task_service.py",
+      "kind": "test",
+      "tasks": "[\"TASK-2\"]",
+      "content": "import copy\nimport unittest\nfrom task_service import list_tasks\n\n\nclass RegressionTests(unittest.TestCase):\n    def test_no_filter(self):\n        rows = [{'id': 2, 'status': 'done'}, {'id': 1}]\n        result = list_tasks(rows)\n        self.assertEqual(result, rows)\n        self.assertIsNot(result, rows)\n\n    def test_empty_unfiltered(self):\n        self.assertEqual(list_tasks([]), [])\n\n\nclass FeatureTests(unittest.TestCase):\n    def test_done(self):\n        rows = [{'id': 1}, {'id': 2, 'status': 'DONE'}, {'id': 3, 'status': ' DONE '}]\n        self.assertEqual(list_tasks(rows, 'done'), [rows[1]])\n\n    def test_normalization_and_default(self):\n        rows = [{'id': 3}, {'id': 1, 'status': 'TODO'}, {'id': 2, 'status': 'done'}]\n        self.assertEqual(list_tasks(rows, ' ToDo '), rows[:2])\n\n    def test_invalid(self):\n        for value in ('', 'pending', '   '):\n            with self.subTest(value=value), self.assertRaises(ValueError):\n                list_tasks([], value)\n\n    def test_empty_filtered(self):\n        self.assertEqual(list_tasks([], 'done'), [])\n\n    def test_no_mutation(self):\n        rows = [{'id': 1}, {'id': 2, 'status': 'done'}]\n        snapshot = copy.deepcopy(rows)\n        list_tasks(rows, 'todo')\n        self.assertEqual(rows, snapshot)\n\n\nif __name__ == '__main__':\n    unittest.main()\n",
+      "sha256": "d9dad3c12344d83ac7dbac32d7a200fb593f3f1e33b3c5c7b58229b137429190"
+    }
+  ],
+  "previous_state": {
+    "memory": {
+      "family": "memory",
+      "artifact_id": "memory",
+      "revision": 3
+    },
+    "entries": [
+      {
+        "citation": {
+          "memory_ref": {
+            "family": "memory",
+            "artifact_id": "memory",
+            "revision": 3
+          },
+          "entry_id": "mem_ent_29f5ba0e2dc04604807a79532fd4d38e",
+          "entry_version_id": "mem_ver_1cedad825a85486b853ca44d2562c2b2"
+        },
+        "version": 1,
+        "kind": "task-progress",
+        "text": "{\"task\": \"TASK-2\", \"completed\": [\"导入规格、代码与测试到 seekdb\", \"MiniMax（MiniMax-M3）已依据上下文修改 list_tasks\"], \"todo\": [\"运行功能测试与回归测试并记录结果\"], \"tests\": [], \"minimax_exchange\": \"evidence/run/5b3abb06746b/20261029T100553Z-exchange.json\", \"saved_at\": 1793268362836404100}",
+        "state": "active",
+        "source_refs": [],
+        "artifact_refs": []
+      },
+      {
+        "citation": {
+          "memory_ref": {
+            "family": "memory",
+            "artifact_id": "memory",
+            "revision": 3
+          },
+          "entry_id": "mem_ent_3fe69cbd84df4ece9d3cd4218da3974c",
+          "entry_version_id": "mem_ver_b2cc9eb0a1df43fc8bf3b37817ca7edb"
+        },
+        "version": 1,
+        "kind": "task-progress",
+        "text": "{\"task\": \"TASK-2\", \"completed\": [\"导入规格、代码与测试到 seekdb\", \"MiniMax 依据上下文完成代码修改\", \"功能测试与回归测试通过\"], \"todo\": [], \"tests\": [{\"stage\": \"before\", \"target_exit\": 1, \"regression_exit\": 0, \"code_sha256\": \"e233a73b2736188e2fe9a8790ca9533a09a4d9dc9ec86110ee17e762a7ded978\"}, {\"stage\": \"after\", \"target_exit\": 0, \"regression_exit\": 0, \"code_sha256\": \"8b9c31f7af6e8d3b0bfb634f9d1ae9ad9c6c7189d4b02e69ed9693f6ca6fe4f0\", \"tests_sha256\": \"2c01d2de7e49987f1ead4e38a0916f4a7f3bae40dcfcf701d24a171435f899a7\"}], \"saved_at\": 1793268363437180500}",
+        "state": "active",
+        "source_refs": [],
+        "artifact_refs": []
+      },
+      {
+        "citation": {
+          "memory_ref": {
+            "family": "memory",
+            "artifact_id": "memory",
+            "revision": 3
+          },
+          "entry_id": "mem_ent_908241aea05949d4adfb0b3fea6f4675",
+          "entry_version_id": "mem_ver_4f1d676164fa43aaa65a0764cf837c48"
+        },
+        "version": 1,
+        "kind": "task-progress",
+        "text": "{\"task\": \"TASK-2\", \"completed\": [\"导入规格、代码与测试到 seekdb\"], \"todo\": [\"由 MiniMax 依据上下文修改代码\", \"运行功能与回归测试\"], \"tests\": [], \"saved_at\": 1793268351974891600}",
+        "state": "active",
+        "source_refs": [],
+        "artifact_refs": []
+      }
+    ]
+  },
+  "query": {
+    "sql": "SELECT path,kind,tasks,content,sha256 FROM sdd_sources WHERE project_id=%s ORDER BY kind,path",
+    "parameters": [
+      "taskboard-5b3abb06746b"
+    ],
+    "database_rows": 3,
+    "selected_rows": 3,
+    "all_queries": [
+      {
+        "sql": "SELECT path,kind,tasks,content,sha256 FROM sdd_sources WHERE project_id=%s ORDER BY kind,path",
+        "parameters": [
+          "taskboard-5b3abb06746b"
+        ],
+        "rows": 3
+      },
+      {
+        "sql": "SELECT path,entry_id,title,body,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id=%s AND path IN (%s,%s,%s)",
+        "parameters": [
+          "taskboard-5b3abb06746b",
+          "spec",
+          "TASK-2",
+          "before/task_service.py",
+          "spec.md",
+          "test_task_service.py"
+        ],
+        "rows": 1
+      },
+      {
+        "sql": "SELECT path,entry_id,title,body,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id<>%s AND path IN (%s) ORDER BY path,line_start",
+        "parameters": [
+          "taskboard-5b3abb06746b",
+          "spec",
+          "TASK-2",
+          "spec.md"
+        ],
+        "rows": 1
+      },
+      {
+        "sql": "SELECT path,entry_id,title,line_start,line_end FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id IN (%s) AND path IN (%s,%s,%s) ORDER BY path,line_start",
+        "parameters": [
+          "taskboard-5b3abb06746b",
+          "code",
+          "list_tasks",
+          "before/task_service.py",
+          "spec.md",
+          "test_task_service.py"
+        ],
+        "rows": 1
+      },
+      {
+        "sql": "SELECT path,entry_id,title,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND path IN (%s,%s,%s) ORDER BY path,line_start",
+        "parameters": [
+          "taskboard-5b3abb06746b",
+          "test",
+          "before/task_service.py",
+          "spec.md",
+          "test_task_service.py"
+        ],
+        "rows": 7
+      }
+    ]
+  }
+}

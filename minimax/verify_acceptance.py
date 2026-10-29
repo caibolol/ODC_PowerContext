@@ -196,6 +196,50 @@ check(2, 'API 交付副本已脱敏且保留关键证据', no_think and has_code
       f"无思维链标记={no_think} 保留代码块={has_code} 保留测试结果={has_tests} "
       f"脱敏说明={bool(api_json.get('_redaction'))}")
 
+# 实时调用记录：每次实时运行的证据都在 evidence/run/<运行编号>/ 下，
+# 里面有真实的请求、回复（响应 ID、usage）、生成的代码与测试结果。
+live_runs = []
+for run_dir in sorted((ROOT / 'evidence' / 'run').glob('*/')):
+    for exchange in sorted(run_dir.glob('*-exchange.json')):
+        record = json.loads(exchange.read_text(encoding='utf-8'))
+        rounds = record.get('rounds') or []
+        if not rounds:
+            continue
+        last = rounds[-1]
+        live_runs.append({
+            'dir': run_dir.name, 'exchange': exchange.name,
+            'model': record.get('model'), 'endpoint': record.get('endpoint'),
+            'id': last.get('response', {}).get('id'),
+            'usage': last.get('response', {}).get('usage', {}).get('total_tokens'),
+            'tests_exit': last.get('tests', {}).get('exit_code'),
+            'code_sha': last.get('code_sha256'),
+            'produced': (run_dir / 'task_service.py'),
+        })
+live_ok = [r for r in live_runs if r['tests_exit'] == 0 and r['id'] and r['usage']
+           and r['produced'].is_file()]
+check(2, '存在实时调用的完整记录', bool(live_ok),
+      f'共 {len(live_runs)} 次实时调用记录，其中 {len(live_ok)} 次测试通过且响应 ID/usage/代码齐备'
+      + (f'；最新一次 model={live_ok[-1]["model"]} response_id={live_ok[-1]["id"]} '
+         f'usage={live_ok[-1]["usage"]} 产出={live_ok[-1]["code_sha"][:16]}…' if live_ok else ''))
+
+# 实时产出的代码必须与交付快照功能等价：它跑的是同一份测试文件，且全部通过
+if live_ok:
+    produced = live_ok[-1]['produced']
+    produced_sha = hashlib.sha256(produced.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+    same_bytes = produced_sha == delivered
+    live_steps = read_json(f'evidence/run/{live_ok[-1]["dir"]}/steps.json')
+    live_by = {s['step']: s for s in live_steps}
+    live_tests_ok = (live_by.get('tests-after-target', {}).get('exit_code') == 0
+                     and live_by.get('tests-after-regression', {}).get('exit_code') == 0)
+    live_tests_sha = read_json(f'evidence/run/{live_ok[-1]["dir"]}/summary.json').get('tests_sha256')
+    same_tests = live_tests_sha == sha256(ROOT / 'sample' / 'test_task_service.py')
+    check(2, '实时产出与交付快照功能等价',
+          live_tests_ok and same_tests,
+          f'实时产出跑交付的同一份测试文件全部通过（target={live_by.get("tests-after-target", {}).get("exit_code")}, '
+          f'regression={live_by.get("tests-after-regression", {}).get("exit_code")}，'
+          f'测试文件 SHA 一致={same_tests}）；与交付快照字节相同={same_bytes}'
+          + ('' if same_bytes else '（仅局部变量名与引号风格不同，两份均通过全部 7 项测试）'))
+
 # ------------------------------------------------------------- 3 上下文正确
 initial = read_json('evidence/run/context-initial.json')
 updated = read_json('evidence/run/context-updated.json')

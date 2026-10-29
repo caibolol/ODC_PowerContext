@@ -90,7 +90,7 @@ seekdb 冷启动需要数秒到数十秒（容器内更久）。`run_demo.py` �
 
 | 路径 | 内容 |
 | --- | --- |
-| `evidence/run/` | `run_demo.py --recorded` 的完整步骤日志与上下文输出（本机干净环境运行）。每次运行的证据存在 `evidence/run/<运行编号>/` 下；**只有成功**的运行才会刷新根目录的 `steps.json` / `summary.json` / `context-*.json`（即「最近一次成功运行」），失败运行不会破坏已有成功证据。`pip-freeze.txt` 为实际依赖，`seekdb-build.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` 为 `verify_acceptance.py` 的判定输出 |
+| `evidence/run/` | 每次 `run_demo.py` 的完整步骤日志与上下文输出。**每次运行的证据存在 `evidence/run/<运行编号>/` 下**；`evidence/run/` 根目录是最近一次成功运行的副本（当前为实时模式运行 `5b3abb06746b`）。**只有成功**的运行才会刷新根目录，失败运行不会破坏已有成功证据。`pip-freeze.txt` 为实际依赖，`seekdb-build.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` 为 `verify_acceptance.py` 的判定输出 |
 | `evidence/workbuddy-minimax/` | 本轮由 WorkBuddy 中运行的 MiniMax（M3.1 Flash）产出最终业务代码的完整开发记录：送入的上下文、产出的代码、统一差异、修改前后测试日志、PowerContext 写入与跨服务重启读回；`platform-record/` 为 WorkBuddy 平台自己生成的会话元数据（模型 ID `minimax-m3.1-flash`）与改动日志 |
 | `evidence/minimax-api/` | 更早一次独立 MiniMax API 调用（模型 `MiniMax-M3`）的真实交互记录与产出代码 |
 | `evidence/linux-ci/` | 更早一次 Ubuntu 24.04 + seekdb 官方镜像的干净环境运行证据 |
