@@ -1,0 +1,68 @@
+Docker 路径验证环境（WSL2 / Ubuntu 24.04.5 LTS，2026-10-29）
+
+本文件记录 README「Linux（推荐，与评审的干净环境一致）」小节里 **Docker 路径**的实测环境。
+该小节的命令逐字未改：
+
+    docker run -d --name seekdb -p 2881:2881 oceanbase/seekdb:latest
+    export DB_HOST=127.0.0.1 DB_PORT=2881 DB_USER=root DB_PASSWORD= DB_NAME=minimax_sdd
+
+Docker 引擎
+  Docker Engine  29.1.3（Ubuntu 官方包 docker.io 29.1.3-0ubuntu3~24.04.2）
+  运行位置      WSL2 / Ubuntu 24.04.5 LTS 内（systemd 已启用，pid1 = systemd）
+  与 Windows 侧关系  独立于 Windows，无需 Docker Desktop，未改动 Windows 任何配置
+
+seekdb 容器
+  镜像          oceanbase/seekdb:latest
+  镜像 ID       4db4961869d5（819MB）
+  RepoDigests   oceanbase/seekdb@sha256:4db4961869d554313520d6081fca29265ba6da6db7313311bd8acbed771a956b
+  说明          该 digest 与 README「依赖与环境」一节记录的一致，官方镜像 latest 未漂移
+  容器          seekdb，端口映射 0.0.0.0:2881->2881/tcp
+  容器内启动    /usr/bin/seekdb --nodaemon --base-dir=/var/lib/seekdb --data-dir=/var/lib/seekdb/store
+                --redo-dir=/var/lib/seekdb/store/redo --port=2881 --parameter cpu_count=4
+                配置 /etc/seekdb/seekdb.cnf，root 空密码
+  容器日志      evidence/run/seekdb-docker.log
+  digest 记录   evidence/run/seekdb-docker-digest.txt
+
+参赛仓库
+  克隆来源      https://github.com/caibolol/ODC_PowerContext.git 分支 2026-competition-ecosystem
+  克隆提交      8bfed2e39c1ac46738d34ef9ceeb6053d383f9ac
+  说明          全新克隆，无任何本地改动
+
+Python 与依赖（全新 venv，按 README 的命令从公开上游安装）
+  Python        3.12.3
+  powercontext  1.2.1.dev2+gdab240063
+                git+https://github.com/oceanbase/powercontext.git @ dab240063bfcfa7917898dc44da4baadb3747bd0
+  PyMySQL       1.2.0
+  完整依赖      evidence/run/pip-freeze-docker.txt
+
+PowerContext 状态
+  POWERCONTEXT_HOME   全新空目录（SQLite powercontext.db）
+
+验证结果
+  run_demo.py --recorded   15 步全部按预期退出，末行 PASS
+                          存档 evidence/run/3107b6f350ab/
+  verify_sample.py        before exit_code=1 / after exit_code=0
+  verify_context.py       PASS（规格更新 + 空状态写入 + 跨进程复用）
+  verify_platform_record.py  PASS（平台改动日志重建的代码与交付文件逐字节一致）
+  test_tooling.py         Ran 10 tests, OK
+  verify_acceptance.py    22/22 通过，输出见 evidence/run/acceptance-check-docker.txt
+
+实测中遇到并解决的问题（评审在有代理的环境会遇到同样情况）
+  1. dockerd 不继承 shell 的 http_proxy 环境变量，直接 pull 会报
+     "TLS handshake timeout"。解决办法是给 daemon 配代理：
+         mkdir -p /etc/systemd/system/docker.service.d
+         cat > /etc/systemd/system/docker.service.d/http-proxy.conf <<EOF
+         [Service]
+         Environment="HTTP_PROXY=http://127.0.0.1:7897"
+         Environment="HTTPS_PROXY=http://127.0.0.1:7897"
+         Environment="NO_PROXY=localhost,127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16"
+         EOF
+         systemctl daemon-reload && systemctl restart docker
+     没有代理的环境不需要这一步。
+  2. 容器内 seekdb 冷启动很快（本次约 2 秒端口就绪，日志显示第 3 次探测 SQL ready），
+     但 README 仍写"约 1 分钟"，run_demo.py 第一步的 wait-services 会自行等待（默认 180 秒），
+     因此不需要手工等待。
+
+说明
+  本次验证在 WSL2 内进行，未安装 Docker Desktop（那需要 Windows 管理员权限并可能要求重启，
+  且与 WSL 内自建的 Docker Engine 冲突）。对评审而言，README 的容器命令与本次实测完全一致。

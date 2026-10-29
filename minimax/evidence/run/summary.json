@@ -1,18 +1,18 @@
 {
-  "run_id": "27553312e69d",
-  "git_revision": "1af68a85bd8e7fff4d98cbc268baab22a0c20ce9",
-  "project": "taskboard-27553312e69d",
+  "run_id": "3107b6f350ab",
+  "git_revision": "8bfed2e39c1ac46738d34ef9ceeb6053d383f9ac",
+  "project": "taskboard-3107b6f350ab",
   "task": "TASK-2",
   "minimax": "recorded",
   "ingest": {
-    "project": "taskboard-27553312e69d",
+    "project": "taskboard-3107b6f350ab",
     "imported": 3,
     "indexed_entries": 10
   },
-  "scope_id": "scp_2tdd31j2jb521yqnvhsg18x76w",
-  "before_sha256": "e233a73b2736188e2fe9a8790ca9533a09a4d9dc9ec86110ee17e762a7ded978",
+  "scope_id": "scp_0d60qr1mmm9gfnhqhe7d3qmxwt",
+  "before_sha256": "0253b9f71074bdaec7d0967b19c98ecd1b39c2e2746fc793dc222fa5abe8e270",
   "after_sha256": "fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4",
-  "tests_sha256": "2c01d2de7e49987f1ead4e38a0916f4a7f3bae40dcfcf701d24a171435f899a7",
+  "tests_sha256": "d9dad3c12344d83ac7dbac32d7a200fb593f3f1e33b3c5c7b58229b137429190",
   "tests_sha256_lf": "d9dad3c12344d83ac7dbac32d7a200fb593f3f1e33b3c5c7b58229b137429190",
   "result": "PASS"
 }

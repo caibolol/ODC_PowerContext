@@ -38,7 +38,7 @@ cd ODC_PowerContext/minimax
 （私有仓库的访问方式见官方《GitHub 在大赛中的使用说明》。克隆后可用 `git rev-parse HEAD`
 确认拿到的提交；下文所有命令都在 `minimax/` 目录下执行。）
 
-已验证：Ubuntu 24.04（GitHub Actions）与 Windows；Python 3.12；PyMySQL 1.2.0；seekdb 官方镜像 `oceanbase/seekdb:latest`（本次 digest `sha256:4db4961869d554313520d6081fca29265ba6da6db7313311bd8acbed771a956b`）；PowerContext 取自官方公开仓库 `https://github.com/oceanbase/powercontext.git`，固定在提交 `dab240063bfcfa7917898dc44da4baadb3747bd0`（该提交位于 `2026-competition` 分支上），通过 HTTP API 使用；MiniMax OpenAI 兼容 Chat Completions，模型 `MiniMax-M3`。
+已验证：Ubuntu 24.04（GitHub Actions 与本机实测）、Ubuntu 22.04、WSL2、Windows；Python 3.11 / 3.12；PyMySQL 1.2.0；seekdb 官方镜像 `oceanbase/seekdb:latest`（本次实测 digest `sha256:4db4961869d554313520d6081fca29265ba6da6db7313311bd8acbed771a956b`，容器路径与原生二进制路径都跑通）；PowerContext 取自官方公开仓库 `https://github.com/oceanbase/powercontext.git`，固定在提交 `dab240063bfcfa7917898dc44da4baadb3747bd0`（该提交位于 `2026-competition` 分支上），通过 HTTP API 使用；MiniMax OpenAI 兼容 Chat Completions，模型 `MiniMax-M3`。
 
 > PowerContext 从**官方公开仓库**安装，评审在干净环境无需任何私有凭据即可完成安装。
 > 安装命令直接固定到提交号，而不是分支名——分支会前进，固定提交才能保证评审装到的版本与本次验证的一致。
@@ -67,7 +67,22 @@ python run_demo.py                            # 实时调用 MiniMax 完成修�
 >   `ensurepip is not available`。此时 `apt-get install python3.12-venv`，或同样用上面的 uv 方式。
 >
 > 本次验证覆盖：Ubuntu 22.04 + Python 3.11.18 与 3.12.16、Ubuntu 24.04 + Python 3.12.16、
-> Windows + Python 3.12.2，均全部通过。
+> Windows + Python 3.12.2，均全部通过。**上面的 Docker 路径本身也已实测**（WSL2 / Ubuntu 24.04，
+> Docker Engine 29.1.3，官方镜像 digest 与本文记录一致），见 `evidence/run/docker-environment.txt`。
+>
+> **若 `docker pull` 报 `TLS handshake timeout`**：`dockerd` 不继承 shell 的 `http_proxy`，
+> 需要给 daemon 单独配（把端口换成实际代理端口；没有代理的环境不需要这一步）：
+>
+> ```bash
+> mkdir -p /etc/systemd/system/docker.service.d
+> cat > /etc/systemd/system/docker.service.d/http-proxy.conf <<'EOF'
+> [Service]
+> Environment="HTTP_PROXY=http://127.0.0.1:7897"
+> Environment="HTTPS_PROXY=http://127.0.0.1:7897"
+> Environment="NO_PROXY=localhost,127.0.0.1,::1,172.16.0.0/12,10.0.0.0/8,192.168.0.0/16"
+> EOF
+> systemctl daemon-reload && systemctl restart docker
+> ```
 
 seekdb 冷启动需要数秒到数十秒（容器内更久）。`run_demo.py` 第一步是 `wait-services`：先轮询等待 seekdb 与 PowerContext 就绪（默认最多 180 秒，可用环境变量 `DEMO_WAIT_TIMEOUT` 调整），就绪后才开始后面的步骤，因此**不需要手工等待或重试**。该等待也会作为一步记录在 `evidence/run/steps.json` 里。
 
@@ -139,7 +154,7 @@ Windows 版 seekdb 二进制可从 <https://github.com/oceanbase/seekdb/releases
 
 | 路径 | 内容 |
 | --- | --- |
-| `evidence/run/` | 每次 `run_demo.py` 的完整步骤日志与上下文输出。**每次运行的证据存在 `evidence/run/<运行编号>/` 下**；`evidence/run/` 根目录是最近一次成功运行的副本（当前为实时模式运行 `5b3abb06746b`）。**只有成功**的运行才会刷新根目录，失败运行不会破坏已有成功证据。已跑过的环境：Windows 全新 venv（`5b3abb06746b` 等）、Windows 从零重装（`3729a7adf522`、`2e8d57635521`）、**Linux / WSL2 全新克隆（Ubuntu 22.04：`a0e4dce9e43f`、`e652ce859b41` 等；Ubuntu 24.04：`9d19b43b0b8c`；均用官方 seekdb 1.4.0 Linux 二进制，其中 `bd8dc0ba1dce` 是 Linux 上的实时调用）**。Python 3.11.18 / 3.12.x 均验证通过。`pip-freeze.txt` 为 Windows 实际依赖，`pip-freeze-linux.txt` 为 Linux 实际依赖，`seekdb-build.txt` / `linux-environment.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` 为 `verify_acceptance.py` 的判定输出 |
+| `evidence/run/` | 每次 `run_demo.py` 的完整步骤日志与上下文输出。**每次运行的证据存在 `evidence/run/<运行编号>/` 下**；`evidence/run/` 根目录是最近一次成功运行的副本（当前为 Docker 路径运行 `3107b6f350ab`）。**只有成功**的运行才会刷新根目录，失败运行不会破坏已有成功证据。已跑过的环境：Windows 全新 venv（`5b3abb06746b` 等）、Windows 从零重装（`3729a7adf522`、`2e8d57635521`）、**Docker 容器路径（`3107b6f350ab`，官方镜像 `oceanbase/seekdb:latest`）**、**Linux / WSL2 全新克隆（Ubuntu 22.04：`a0e4dce9e43f`、`e652ce859b41` 等；Ubuntu 24.04：`9d19b43b0b8c`；用官方 seekdb 1.4.0 Linux 二进制，其中 `bd8dc0ba1dce` 是 Linux 上的实时调用）**。Python 3.11.18 / 3.12.x 均验证通过。`pip-freeze.txt` 为 Windows 实际依赖，`pip-freeze-linux.txt` / `pip-freeze-docker.txt` 为 Linux / Docker 实际依赖，`seekdb-build.txt` / `linux-environment.txt` / `docker-environment.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` / `acceptance-check-docker.txt` 为 `verify_acceptance.py` 的判定输出 |
 | `evidence/workbuddy-minimax/` | 本轮由 WorkBuddy 中运行的 MiniMax（M3.1 Flash）产出最终业务代码的完整开发记录：送入的上下文、产出的代码、统一差异、修改前后测试日志、PowerContext 写入与跨服务重启读回；`platform-record/` 为 WorkBuddy 平台自己生成的会话元数据（模型 ID `minimax-m3.1-flash`）与改动日志 |
 | `evidence/minimax-api/` | 更早一次独立 MiniMax API 调用（模型 `MiniMax-M3`）的真实交互记录与产出代码 |
 | `evidence/reinstall/` | 一次**从零重装**验证的记录：删除旧虚拟环境后按 README 命令从公开源重装、全新数据库与全新 PowerContext 状态目录，各入口与实时调用的结果，以及环境快照与完整依赖 |
