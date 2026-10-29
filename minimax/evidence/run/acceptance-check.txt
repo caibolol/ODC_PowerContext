@@ -56,7 +56,7 @@
   [PASS] 同组测试修改前失败、修改后全通过
          修改前 功能=1(FAILED (failures=5)) 回归=0；修改后 功能=0 回归=0
   [PASS] 测试集前后一致
-         sample/test_task_service.py SHA-256 2c01d2de7e49987f… 与运行记录一致
+         sample/test_task_service.py 归一化哈希一致（recorded d9dad3c12344d83a… == 本地 d9dad3c12344d83a…）
 
 ==============================================================================
 共 22 项检查，通过 22，失败 0
