@@ -26,6 +26,18 @@
 
 ## 依赖与环境
 
+### 先取得代码
+
+作品在参赛仓库的 `minimax/` 目录下，评审按官方说明克隆仓库后再进入该目录：
+
+```bash
+git clone --branch 2026-competition-ecosystem https://<你的用户名>:<你的访问令牌>@github.com/caibolol/ODC_PowerContext.git
+cd ODC_PowerContext/minimax
+```
+
+（私有仓库的访问方式见官方《GitHub 在大赛中的使用说明》。克隆后可用 `git rev-parse HEAD`
+确认拿到的提交；下文所有命令都在 `minimax/` 目录下执行。）
+
 已验证：Ubuntu 24.04（GitHub Actions）与 Windows；Python 3.12；PyMySQL 1.2.0；seekdb 官方镜像 `oceanbase/seekdb:latest`（本次 digest `sha256:4db4961869d554313520d6081fca29265ba6da6db7313311bd8acbed771a956b`）；PowerContext 取自官方公开仓库 `https://github.com/oceanbase/powercontext.git`，固定在提交 `dab240063bfcfa7917898dc44da4baadb3747bd0`（该提交位于 `2026-competition` 分支上），通过 HTTP API 使用；MiniMax OpenAI 兼容 Chat Completions，模型 `MiniMax-M3`。
 
 > PowerContext 从**官方公开仓库**安装，评审在干净环境无需任何私有凭据即可完成安装。
@@ -34,7 +46,6 @@
 ### Linux（推荐，与评审的干净环境一致）
 
 ```bash
-cd minimax
 python3 -m venv .venv && . .venv/bin/activate
 pip install -r requirements.txt
 pip install "powercontext[cli,server] @ git+https://github.com/oceanbase/powercontext.git@dab240063bfcfa7917898dc44da4baadb3747bd0"
@@ -47,10 +58,32 @@ export MINIMAX_API_KEY=<你的 MiniMax API Key>  # 占位值；可选 MINIMAX_MO
 python run_demo.py                            # 实时调用 MiniMax 完成修改
 ```
 
+> **Python 版本**：PowerContext 要求 Python ≥ 3.11。Ubuntu 22.04 自带的 `python3` 是 3.10，
+> 直接 `python3 -m venv` 装不上。改用 `python3.12 -m venv .venv`，或先 `apt-get install python3.12`，
+> 或用 uv：`uv python install 3.12 && uv venv --python 3.12 --seed .venv`（`--seed` 必须加，
+> 否则 uv 建的 venv 里没有 `pip`）。本次 Linux 验证即在 Ubuntu 22.04 + Python 3.12.16 上跑通。
+
 seekdb 冷启动需要数秒到数十秒（容器内更久）。`run_demo.py` 第一步是 `wait-services`：先轮询等待 seekdb 与 PowerContext 就绪（默认最多 180 秒，可用环境变量 `DEMO_WAIT_TIMEOUT` 调整），就绪后才开始后面的步骤，因此**不需要手工等待或重试**。该等待也会作为一步记录在 `evidence/run/steps.json` 里。
 
 > 若 `pip install` 报 `Could not find a version that satisfies ... (from versions: none)`，多半是本机 pip 镜像源临时不可用（同一版本用 `pip index versions` 往往能列出来）。改用官方源即可：
 > `pip install --index-url https://pypi.org/simple --no-cache-dir -r requirements.txt`（PowerContext 那条同理）。
+
+#### 没有 Docker 时：用官方 seekdb 二进制
+
+seekdb 官方发布了 Linux 二进制，可替代上面的容器（本次在 Ubuntu 22.04 上按此路径跑通）：
+
+```bash
+# 1) 取官方二进制（Ubuntu 22.04 amd64；其他发行版见 https://github.com/oceanbase/seekdb/releases）
+curl -L -o seekdb.deb https://github.com/oceanbase/seekdb/releases/download/v1.4.0/seekdb_1.4.0-100000212026082616ubuntu22.04_amd64.deb
+dpkg-deb -x seekdb.deb ./seekdb_pkg
+# 2) seekdb 需要 libaio.so.1；没有 sudo 时可同样解包官方 libaio1 并用 LD_LIBRARY_PATH 提供
+curl -L -o libaio1.deb http://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb
+dpkg-deb -x libaio1.deb ./libaio_pkg
+export LD_LIBRARY_PATH="$PWD/libaio_pkg/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
+# 3) 起服务（其余环境变量同上，把 DB_PORT 改成实际端口）
+./seekdb_pkg/usr/bin/seekdb --nodaemon --base-dir "$PWD/seekdb-data" --port 2881 \
+  --parameter memory_limit=4G --parameter log_disk_size=2G --parameter datafile_size=2G &
+```
 
 `.github/workflows/minimax-demo.yml`（开发分支 `claude/minimax`）按同样步骤在干净的 GitHub Actions 环境执行。
 
@@ -65,6 +98,9 @@ seekdb 冷启动需要数秒到数十秒（容器内更久）。`run_demo.py` �
 ```
 
 未传该参数时 PowerShell 会报「强制参数缺失: SeekdbExe」。
+Windows 版 seekdb 二进制可从 <https://github.com/oceanbase/seekdb/releases> 取对应安装包，
+或按官方源码编译；本次验证用的是自行编译的 1.4.0（`seekdb.exe`）。
+若评审环境没有 Docker，Linux 下也可用上面的「官方 seekdb 二进制」路径，两者等价。
 
 ## 验证样例
 
