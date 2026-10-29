@@ -58,10 +58,16 @@ export MINIMAX_API_KEY=<你的 MiniMax API Key>  # 占位值；可选 MINIMAX_MO
 python run_demo.py                            # 实时调用 MiniMax 完成修改
 ```
 
-> **Python 版本**：PowerContext 要求 Python ≥ 3.11。Ubuntu 22.04 自带的 `python3` 是 3.10，
-> 直接 `python3 -m venv` 装不上。改用 `python3.12 -m venv .venv`，或先 `apt-get install python3.12`，
-> 或用 uv：`uv python install 3.12 && uv venv --python 3.12 --seed .venv`（`--seed` 必须加，
-> 否则 uv 建的 venv 里没有 `pip`）。本次 Linux 验证即在 Ubuntu 22.04 + Python 3.12.16 上跑通。
+> **Python 版本**（Ubuntu 上两种情况都会撞到）：
+> - Ubuntu 22.04 自带的 `python3` 是 **3.10**，低于 PowerContext 要求的 3.11，直接 `python3 -m venv` 装不上。
+>   改用 `python3.12 -m venv .venv`，或 `apt-get install python3.12`，或
+>   `uv python install 3.12 && uv venv --python 3.12 --seed .venv`（`--seed` 必须加，
+>   否则 uv 建的 venv 里没有 `pip`）。
+> - Ubuntu 24.04 的 `python3` 是 3.12，但**默认不带 `ensurepip`**，`python3 -m venv` 会报
+>   `ensurepip is not available`。此时 `apt-get install python3.12-venv`，或同样用上面的 uv 方式。
+>
+> 本次验证覆盖：Ubuntu 22.04 + Python 3.11.18 与 3.12.16、Ubuntu 24.04 + Python 3.12.16、
+> Windows + Python 3.12.2，均全部通过。
 
 seekdb 冷启动需要数秒到数十秒（容器内更久）。`run_demo.py` 第一步是 `wait-services`：先轮询等待 seekdb 与 PowerContext 就绪（默认最多 180 秒，可用环境变量 `DEMO_WAIT_TIMEOUT` 调整），就绪后才开始后面的步骤，因此**不需要手工等待或重试**。该等待也会作为一步记录在 `evidence/run/steps.json` 里。
 
@@ -73,10 +79,11 @@ seekdb 冷启动需要数秒到数十秒（容器内更久）。`run_demo.py` �
 seekdb 官方发布了 Linux 二进制，可替代上面的容器（本次在 Ubuntu 22.04 上按此路径跑通）：
 
 ```bash
-# 1) 取官方二进制（Ubuntu 22.04 amd64；其他发行版见 https://github.com/oceanbase/seekdb/releases）
+# 1) 取官方二进制（Ubuntu 22.04 amd64；24.04 用 ubuntu24.04 那份，其他发行版见 releases 页）
 curl -L -o seekdb.deb https://github.com/oceanbase/seekdb/releases/download/v1.4.0/seekdb_1.4.0-100000212026082616ubuntu22.04_amd64.deb
 dpkg-deb -x seekdb.deb ./seekdb_pkg
-# 2) seekdb 需要 libaio.so.1；没有 sudo 时可同样解包官方 libaio1 并用 LD_LIBRARY_PATH 提供
+# 2) seekdb 需要 libaio：22.04 是 libaio.so.1，24.04 是 libaio.so.1t64（time64 迁移版）。
+#    没有 sudo 时可同样解包官方包并用 LD_LIBRARY_PATH 提供（下面以 22.04 为例，24.04 换成 libaio1t64_*）
 curl -L -o libaio1.deb http://archive.ubuntu.com/ubuntu/pool/main/liba/libaio/libaio1_0.3.112-13build1_amd64.deb
 dpkg-deb -x libaio1.deb ./libaio_pkg
 export LD_LIBRARY_PATH="$PWD/libaio_pkg/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH:-}"
@@ -84,6 +91,9 @@ export LD_LIBRARY_PATH="$PWD/libaio_pkg/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PA
 ./seekdb_pkg/usr/bin/seekdb --nodaemon --base-dir "$PWD/seekdb-data" --port 2881 \
   --parameter memory_limit=4G --parameter log_disk_size=2G --parameter datafile_size=2G &
 ```
+
+> 有 sudo 时更简单：`apt-get install -y libaio1`（24.04 上是 `libaio1t64`）。
+> 本次 Linux 验证即按上面的免 root 方式在 Ubuntu 22.04 与 Ubuntu 24.04 上分别跑通。
 
 `.github/workflows/minimax-demo.yml`（开发分支 `claude/minimax`）按同样步骤在干净的 GitHub Actions 环境执行。
 
@@ -129,7 +139,7 @@ Windows 版 seekdb 二进制可从 <https://github.com/oceanbase/seekdb/releases
 
 | 路径 | 内容 |
 | --- | --- |
-| `evidence/run/` | 每次 `run_demo.py` 的完整步骤日志与上下文输出。**每次运行的证据存在 `evidence/run/<运行编号>/` 下**；`evidence/run/` 根目录是最近一次成功运行的副本（当前为实时模式运行 `5b3abb06746b`）。**只有成功**的运行才会刷新根目录，失败运行不会破坏已有成功证据。已跑过的环境：Windows 全新 venv（`5b3abb06746b` 等）、Windows 从零重装（`3729a7adf522`、`2e8d57635521`）、**Linux / WSL2 Ubuntu 22.04 全新克隆（`a0e4dce9e43f`、`e652ce859b41` 等，用官方 seekdb 1.4.0 Linux 二进制；其中 `bd8dc0ba1dce` 是 Linux 上的实时调用）**。Python 3.11.18 与 3.12.x 均验证通过。`pip-freeze.txt` 为 Windows 实际依赖，`pip-freeze-linux.txt` 为 Linux 实际依赖，`seekdb-build.txt` / `linux-environment.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` 为 `verify_acceptance.py` 的判定输出 |
+| `evidence/run/` | 每次 `run_demo.py` 的完整步骤日志与上下文输出。**每次运行的证据存在 `evidence/run/<运行编号>/` 下**；`evidence/run/` 根目录是最近一次成功运行的副本（当前为实时模式运行 `5b3abb06746b`）。**只有成功**的运行才会刷新根目录，失败运行不会破坏已有成功证据。已跑过的环境：Windows 全新 venv（`5b3abb06746b` 等）、Windows 从零重装（`3729a7adf522`、`2e8d57635521`）、**Linux / WSL2 全新克隆（Ubuntu 22.04：`a0e4dce9e43f`、`e652ce859b41` 等；Ubuntu 24.04：`9d19b43b0b8c`；均用官方 seekdb 1.4.0 Linux 二进制，其中 `bd8dc0ba1dce` 是 Linux 上的实时调用）**。Python 3.11.18 / 3.12.x 均验证通过。`pip-freeze.txt` 为 Windows 实际依赖，`pip-freeze-linux.txt` 为 Linux 实际依赖，`seekdb-build.txt` / `linux-environment.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` 为 `verify_acceptance.py` 的判定输出 |
 | `evidence/workbuddy-minimax/` | 本轮由 WorkBuddy 中运行的 MiniMax（M3.1 Flash）产出最终业务代码的完整开发记录：送入的上下文、产出的代码、统一差异、修改前后测试日志、PowerContext 写入与跨服务重启读回；`platform-record/` 为 WorkBuddy 平台自己生成的会话元数据（模型 ID `minimax-m3.1-flash`）与改动日志 |
 | `evidence/minimax-api/` | 更早一次独立 MiniMax API 调用（模型 `MiniMax-M3`）的真实交互记录与产出代码 |
 | `evidence/reinstall/` | 一次**从零重装**验证的记录：删除旧虚拟环境后按 README 命令从公开源重装、全新数据库与全新 PowerContext 状态目录，各入口与实时调用的结果，以及环境快照与完整依赖 |
