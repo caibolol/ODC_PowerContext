@@ -13,5 +13,6 @@
   "before_sha256": "0253b9f71074bdaec7d0967b19c98ecd1b39c2e2746fc793dc222fa5abe8e270",
   "after_sha256": "fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4",
   "tests_sha256": "d9dad3c12344d83ac7dbac32d7a200fb593f3f1e33b3c5c7b58229b137429190",
-  "result": "PASS"
+  "result": "PASS",
+  "tests_sha256_lf": "d9dad3c12344d83ac7dbac32d7a200fb593f3f1e33b3c5c7b58229b137429190"
 }

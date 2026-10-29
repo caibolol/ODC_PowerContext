@@ -307,8 +307,20 @@ check(6, '同组测试修改前失败、修改后全通过', ok6,
 
 # 测试集前后一致
 tests_sha = sha256(ROOT / 'sample' / 'test_task_service.py')
-check(6, '测试集前后一致', run.get('tests_sha256') == tests_sha,
-      f"sample/test_task_service.py SHA-256 {tests_sha[:16]}… 与运行记录一致")
+# 测试集前后一致：优先比「LF 归一化」哈希——Windows 工作区是 CRLF、Linux 是 LF，
+# 记录的原始摘要是产出它那台机器上的字节，跨平台只有归一化形式才可比。
+tests_sha_raw = sha256(ROOT / 'sample' / 'test_task_service.py')
+tests_sha_lf = sha256_lf(ROOT / 'sample' / 'test_task_service.py')
+recorded_lf = run.get('tests_sha256_lf')
+recorded_raw = run.get('tests_sha256')
+if recorded_lf:
+    same_test_set = recorded_lf == tests_sha_lf
+    detail = f'归一化哈希一致（recorded {recorded_lf[:16]}… == 本地 {tests_sha_lf[:16]}…）'
+else:
+    same_test_set = recorded_raw in (tests_sha_raw, tests_sha_lf)
+    detail = f'原始哈希一致={recorded_raw in (tests_sha_raw, tests_sha_lf)}'
+check(6, '测试集前后一致', same_test_set,
+      f'sample/test_task_service.py {detail}')
 
 # ------------------------------------------------------------------ 汇总输出
 print('=' * 78)

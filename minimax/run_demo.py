@@ -103,6 +103,11 @@ def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
+def sha256_lf(path):
+    """按 LF 归一化后的哈希：跨平台（Windows CRLF / Linux LF）可比。"""
+    return hashlib.sha256(Path(path).read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--recorded', action='store_true', help='使用已记录的 MiniMax 输出，不调用 API')
@@ -207,6 +212,9 @@ def main():
                                 ('context-updated', updated)):
                 (run_dir / f'{name}.json').write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
             summary.update({'before_sha256': before_sha, 'after_sha256': after_sha, 'tests_sha256': tests_sha,
+                            # 同时记录按 LF 归一化后的哈希：Windows 工作区是 CRLF、Linux 是 LF，
+                            # 跨平台比对摘要时只有归一化形式才可比。
+                            'tests_sha256_lf': sha256_lf(sample / 'test_task_service.py'),
                             'result': 'PASS'})
             passed = True
             print('PASS')
