@@ -12,7 +12,7 @@
   [PASS] 步骤日志含命令与退出码
          15 步均有 command/exit_code
   [PASS] 验收文档引用归档的真实运行记录
-         文档引用 ['5b3abb06746b', '8ef54fe34756']，其中 ['5b3abb06746b', '8ef54fe34756'] 在 evidence/run/ 下有归档，且归档的提交号与文档一致
+         文档引用 ['2e8d57635521', '3729a7adf522', '5b3abb06746b', '76cedaa6e337', '8ef54fe34756']，其中 ['2e8d57635521', '3729a7adf522', '5b3abb06746b', '76cedaa6e337', '8ef54fe34756'] 在 evidence/run/ 下有归档，且归档的提交号与文档一致
   [PASS] 最近一次成功运行有归档副本
          evidence/run/summary.json 的 run_id=5b3abb06746b 在归档中
 
@@ -34,7 +34,7 @@
   [PASS] API 交付副本已脱敏且保留关键证据
          无思维链标记=True 保留代码块=True 保留测试结果=True 脱敏说明=True
   [PASS] 存在实时调用的完整记录
-         共 1 次实时调用记录，其中 1 次测试通过且响应 ID/usage/代码齐备；最新一次 model=MiniMax-M3 response_id=07324d87bd9ca30a48c0ae71d254661b usage=2039 产出=8b9c31f7af6e8d3b…
+         共 2 次实时调用记录，其中 2 次测试通过且响应 ID/usage/代码齐备；最新一次 model=MiniMax-M3 response_id=07324d87bd9ca30a48c0ae71d254661b usage=2039 产出=8b9c31f7af6e8d3b…
   [PASS] 实时产出与交付快照功能等价
          实时产出跑交付的同一份测试文件全部通过（target=0, regression=0，测试文件 SHA 一致=True）；与交付快照字节相同=False（仅局部变量名与引号风格不同，两份均通过全部 7 项测试）
 

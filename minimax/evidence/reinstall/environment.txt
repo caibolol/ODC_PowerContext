@@ -1,0 +1,13 @@
+重装验证环境（2026-10-29）
+
+Python            : 3.12.2  (win32)
+PyMySQL           : 1.2.0   (模块 VERSION=(1, 2, 0, 'final')；注意该发行包的 pymysql.__version__ 字符串是过期的 "2.2.8"，真实版本以 VERSION 与 pip 为准)
+powercontext      : 1.2.1.dev2+gdab240063
+powercontext 来源 : git+https://github.com/oceanbase/powercontext.git @ dab240063bfcfa7917898dc44da4baadb3747bd0（官方公开仓库）
+seekdb 服务端     : 5.7.25-OceanBase seekdb-v1.4.0.0
+seekdb 启动参数   : --nodaemon --base-dir <全新目录> --port 18803 --parameter memory_limit=4G --parameter log_disk_size=2G --parameter datafile_size=2G
+PowerContext 状态 : $POWERCONTEXT_HOME = <全新目录>（SQLite powercontext.db）
+克隆来源          : https://github.com/caibolol/ODC_PowerContext.git 分支 2026-competition-ecosystem（提交 ac90b562）
+
+说明：全部依赖为删除旧虚拟环境后重新创建并按 README 的命令从公开源安装；
+      数据库数据目录与 PowerContext 状态目录均为全新空目录。

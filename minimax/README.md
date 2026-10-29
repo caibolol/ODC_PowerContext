@@ -49,6 +49,9 @@ python run_demo.py                            # 实时调用 MiniMax 完成修�
 
 seekdb 冷启动需要数秒到数十秒（容器内更久）。`run_demo.py` 第一步是 `wait-services`：先轮询等待 seekdb 与 PowerContext 就绪（默认最多 180 秒，可用环境变量 `DEMO_WAIT_TIMEOUT` 调整），就绪后才开始后面的步骤，因此**不需要手工等待或重试**。该等待也会作为一步记录在 `evidence/run/steps.json` 里。
 
+> 若 `pip install` 报 `Could not find a version that satisfies ... (from versions: none)`，多半是本机 pip 镜像源临时不可用（同一版本用 `pip index versions` 往往能列出来）。改用官方源即可：
+> `pip install --index-url https://pypi.org/simple --no-cache-dir -r requirements.txt`（PowerContext 那条同理）。
+
 `.github/workflows/minimax-demo.yml`（开发分支 `claude/minimax`）按同样步骤在干净的 GitHub Actions 环境执行。
 
 ### Windows
@@ -93,6 +96,7 @@ seekdb 冷启动需要数秒到数十秒（容器内更久）。`run_demo.py` �
 | `evidence/run/` | 每次 `run_demo.py` 的完整步骤日志与上下文输出。**每次运行的证据存在 `evidence/run/<运行编号>/` 下**；`evidence/run/` 根目录是最近一次成功运行的副本（当前为实时模式运行 `5b3abb06746b`）。**只有成功**的运行才会刷新根目录，失败运行不会破坏已有成功证据。`pip-freeze.txt` 为实际依赖，`seekdb-build.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` 为 `verify_acceptance.py` 的判定输出 |
 | `evidence/workbuddy-minimax/` | 本轮由 WorkBuddy 中运行的 MiniMax（M3.1 Flash）产出最终业务代码的完整开发记录：送入的上下文、产出的代码、统一差异、修改前后测试日志、PowerContext 写入与跨服务重启读回；`platform-record/` 为 WorkBuddy 平台自己生成的会话元数据（模型 ID `minimax-m3.1-flash`）与改动日志 |
 | `evidence/minimax-api/` | 更早一次独立 MiniMax API 调用（模型 `MiniMax-M3`）的真实交互记录与产出代码 |
+| `evidence/reinstall/` | 一次**从零重装**验证的记录：删除旧虚拟环境后按 README 命令从公开源重装、全新数据库与全新 PowerContext 状态目录，各入口与实时调用的结果，以及环境快照与完整依赖 |
 | `evidence/linux-ci/` | 更早一次 Ubuntu 24.04 + seekdb 官方镜像的干净环境运行证据 |
 | `evidence/clean-environment/` | 队员在另一台干净 Windows 机器上的独立复验记录 |
 | `evidence/minimax-request.txt`、`evidence/minimax-response.py`、`evidence/final-change.diff`、`evidence/local-task_service.py` | 最早的 MiniMax 网页端会话记录 |

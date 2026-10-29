@@ -5,11 +5,12 @@
 | 记录 | 模型 / 接入方式 | 产出的代码 | 证据 |
 | --- | --- | --- | --- |
 | **本轮（最终采用）** | WorkBuddy 宿主中运行的 MiniMax M3.1 Flash，模型直接读入会话 | `sample/after/task_service.py`（SHA-256 `fc7ab995…`） | `evidence/workbuddy-minimax/` |
-| **本次实测（实时）** | 独立 MiniMax API 调用，模型 `MiniMax-M3`，2026-10-29 实跑 | `evidence/run/5b3abb06746b/task_service.py`（SHA-256 `8b9c31f7…`） | `evidence/run/5b3abb06746b/` |
+| **本次实测（实时）** | 独立 MiniMax API 调用，模型 `MiniMax-M3`，2026-10-29 实跑（两次） | `evidence/run/5b3abb06746b/task_service.py`（SHA-256 `8b9c31f7…`）、`evidence/run/2e8d57635521/task_service.py`（SHA-256 `7f3785f5…`） | `evidence/run/5b3abb06746b/`、`evidence/run/2e8d57635521/` |
 | 更早一次（保留） | 独立 MiniMax API 调用，模型 `MiniMax-M3`，2026-10-28 | `evidence/minimax-api/20261028T010349Z-task_service.py`（SHA-256 `8b9c31f7…`） | `evidence/minimax-api/` |
 
-三份产出的**行为完全一致**（同一份测试文件下 7 项全通过），只差局部变量名与引号风格；
-最终业务代码采用本轮 WorkBuddy 的产出。两次独立的 MiniMax API 调用（相隔一天）产出了**逐字节相同**的代码。
+四份产出的**行为完全一致**（同一份测试文件下 7 项全通过），只差局部变量名、引号风格与一句错误提示文案；
+最终业务代码采用本轮 WorkBuddy 的产出。三次独立的 MiniMax API 调用中有两次产出了**逐字节相同**的代码，
+第三次（重装环境内）只有一行错误提示文案不同——说明模型每次确实重新生成。
 
 ## 一、本轮：WorkBuddy 中的 MiniMax 完成代码修改（最终采用）
 
@@ -40,11 +41,17 @@
 这一轮与 2026-10-28 那次 API 调用（同一模型、同一上下文构造、同一提示）产出了**逐字节相同**的代码，
 且第 1 轮同样栽在「把记录中的 status 也做了 strip」上、第 2 轮同样自行修正——与更早记录的过程完全吻合。
 
+**后续又做了两次实时调用**（其中一次在「从零重装」的环境里，见 `evidence/reinstall/`）：
+`2e8d57635521`（响应 ID `07325a1a5169b0375b601516f1c5deaf`，2014 tokens）的产出与前两次
+**只有一行错误提示文案不同**（`"must be either 'todo' or 'done'"` → `"must be 'todo' or 'done'"`），
+产出 SHA-256 `7f3785f54b6a1406…`。三次实时调用都跑同一份测试文件、均为 7 项全通过——
+模型确实每次重新生成，正对应官方「不要求模型重新生成完全相同的补丁」。
+
 **与交付快照的关系**：本次实时产出与 `sample/after/task_service.py`（WorkBuddy 版）**功能等价、字节不同**，
 差异仅三行（局部变量名 `normalized_status` → `wanted` 与引号风格）。两份代码跑**同一份**测试文件
 （SHA-256 `2c01d2de…`）均为 7 项全通过。`verify_acceptance.py` 的「实时产出与交付快照功能等价」一项会机械核对这一点。
 
-**本次实时运行没有覆盖交付的业务快照**：产出只写入 `evidence/run/5b3abb06746b/`，`sample/after/task_service.py` 保持不变。
+**实时运行不覆盖交付的业务快照**：产出只写入 `evidence/run/<运行编号>/`，`sample/after/task_service.py` 保持不变。
 
 ## 二、更早一次：独立 MiniMax API 调用（保留）
 
