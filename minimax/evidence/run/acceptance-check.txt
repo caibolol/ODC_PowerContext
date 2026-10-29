@@ -12,7 +12,7 @@
   [PASS] 步骤日志含命令与退出码
          15 步均有 command/exit_code
   [PASS] 验收文档引用归档的真实运行记录
-         文档引用 ['260c4776669a', '2e8d57635521', '3107b6f350ab', '3729a7adf522', '5b3abb06746b', '76cedaa6e337', '8ef54fe34756', '9d19b43b0b8c', 'a0e4dce9e43f', 'afdc946bbe69', 'bd8dc0ba1dce', 'e652ce859b41']，其中 ['260c4776669a', '3107b6f350ab', '5b3abb06746b', 'bd8dc0ba1dce'] 在 evidence/run/ 下有归档，且归档的提交号与文档一致
+         文档引用 ['260c4776669a', '2e8d57635521', '3107b6f350ab', '3729a7adf522', '5b3abb06746b', '76cedaa6e337', '8ef54fe34756', '9d19b43b0b8c', 'a0e4dce9e43f', 'afdc946bbe69', 'bd8dc0ba1dce', 'e652ce859b41', 'f6d579e0f14e']，其中 ['260c4776669a', '3107b6f350ab', '5b3abb06746b', 'bd8dc0ba1dce', 'f6d579e0f14e'] 在 evidence/run/ 下有归档，且归档的提交号与文档一致
   [PASS] 最近一次成功运行有归档副本
          evidence/run/summary.json 的 run_id=3107b6f350ab 在归档中
 
