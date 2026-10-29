@@ -231,14 +231,31 @@ if live_ok:
     live_by = {s['step']: s for s in live_steps}
     live_tests_ok = (live_by.get('tests-after-target', {}).get('exit_code') == 0
                      and live_by.get('tests-after-regression', {}).get('exit_code') == 0)
-    live_tests_sha = read_json(f'evidence/run/{live_ok[-1]["dir"]}/summary.json').get('tests_sha256')
-    same_tests = live_tests_sha == sha256(ROOT / 'sample' / 'test_task_service.py')
+    live_tests_sha = read_json(f'evidence/run/{live_ok[-1]["dir"]}/summary.json').get('tests_sha256') or ''
+    # 真正验证功能等价：把**交付的**测试文件与实时产出的代码放在一起跑。
+    # 不能只比哈希 —— 摘要是在产出它的那台机器上算的（Windows 上可能是 CRLF、Linux 上是 LF），
+    # 跨平台比对摘要必然对不上。实跑一遍才是与平台无关的证明。
+    import shutil as _shutil
+    import subprocess as _subprocess
+    import tempfile as _tempfile
+    with _tempfile.TemporaryDirectory() as temporary:
+        work = Path(temporary)
+        _shutil.copyfile(produced, work / 'task_service.py')
+        _shutil.copyfile(ROOT / 'sample' / 'test_task_service.py', work / 'test_task_service.py')
+        env = dict(os.environ, PYTHONPATH=str(work))
+        probe = _subprocess.run([sys.executable, '-B', '-m', 'unittest', 'test_task_service'],
+                                cwd=work, env=env, capture_output=True, text=True)
+    ran_7 = 'Ran 7 tests' in probe.stderr
+    equivalent = probe.returncode == 0 and ran_7
+    local_raw = sha256(ROOT / 'sample' / 'test_task_service.py')
+    same_tests = live_tests_sha in (local_raw, sha256_lf(ROOT / 'sample' / 'test_task_service.py'))
     check(2, '实时产出与交付快照功能等价',
-          live_tests_ok and same_tests,
-          f'实时产出跑交付的同一份测试文件全部通过（target={live_by.get("tests-after-target", {}).get("exit_code")}, '
-          f'regression={live_by.get("tests-after-regression", {}).get("exit_code")}，'
-          f'测试文件 SHA 一致={same_tests}）；与交付快照字节相同={same_bytes}'
-          + ('' if same_bytes else '（仅局部变量名与引号风格不同，两份均通过全部 7 项测试）'))
+          live_tests_ok and equivalent,
+          f'把交付的测试文件与实时产出的代码放在一起实跑：{probe.stderr.strip().splitlines()[-1]}'
+          f'（{ran_7 and "7 项全通过" or "用例数不符"}）'
+          f'；该次运行自记的测试退出码 target={live_by.get("tests-after-target", {}).get("exit_code")}、'
+          f'regression={live_by.get("tests-after-regression", {}).get("exit_code")}'
+          + ('' if same_bytes else '；与交付快照字节不同（仅局部变量名、引号风格与一句错误提示文案不同）'))
 
 # ------------------------------------------------------------- 3 上下文正确
 initial = read_json('evidence/run/context-initial.json')

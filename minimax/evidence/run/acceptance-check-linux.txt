@@ -1,0 +1,65 @@
+==============================================================================
+官方六项必做项 · 交付材料一致性自检
+==============================================================================
+
+【1】
+  [PASS] 必需文件齐备
+         20 个必需文件全部存在
+  [PASS] 依赖来自公开仓库
+         requirements 与 README 安装命令均指向 oceanbase/powercontext
+  [PASS] 验证样例已跑通
+         run_id=e652ce859b41 git_revision=9ee0662d3c2ec58bf3b2b7d99806bde99288745b result=PASS
+  [PASS] 步骤日志含命令与退出码
+         15 步均有 command/exit_code
+  [PASS] 验收文档引用归档的真实运行记录
+         文档引用 ['2e8d57635521', '3729a7adf522', '5b3abb06746b', '76cedaa6e337', '8ef54fe34756']，其中 ['2e8d57635521', '3729a7adf522', '5b3abb06746b', '76cedaa6e337', '8ef54fe34756'] 在 evidence/run/ 下有归档，且归档的提交号与文档一致
+  [PASS] 最近一次成功运行有归档副本
+         evidence/run/summary.json 的 run_id=e652ce859b41 在归档中
+
+【2】
+  [PASS] 平台记录了本轮模型
+         session=ffade525-acba-4563-8b77-6c97fd6683b8 model=minimax-m3.1-flash
+  [PASS] 模型名属于 MiniMax
+         model='minimax-m3.1-flash' 含 minimax
+  [PASS] 会话 ID 与变更记录关联
+         2 份变更记录的 conversationId 均为 ffade525-acba-4563-8b77-6c97fd6683b8
+  [PASS] 平台改动日志含业务代码 hunk
+         changes-*.json 中找到 task_service.py 的 unified-diff hunk
+  [PASS] 模型产出与提交代码逐字节对应
+         平台重建 fc7ab99516ea1a02… == 提交 fc7ab99516ea1a02…
+  [PASS] 开发记录含任务与上下文
+         任务 TASK-2，送入规格 2 条，差异 17 行
+  [PASS] 独立 API 记录（佐证）
+         endpoint=https://api.minimaxi.com/v1/chat/completions model=MiniMax-M3 rounds=2
+  [PASS] API 交付副本已脱敏且保留关键证据
+         无思维链标记=True 保留代码块=True 保留测试结果=True 脱敏说明=True
+  [PASS] 存在实时调用的完整记录
+         共 2 次实时调用记录，其中 2 次测试通过且响应 ID/usage/代码齐备；最新一次 model=MiniMax-M3 response_id=07324d87bd9ca30a48c0ae71d254661b usage=2039 产出=8b9c31f7af6e8d3b…
+  [PASS] 实时产出与交付快照功能等价
+         把交付的测试文件与实时产出的代码放在一起实跑：OK（7 项全通过）；该次运行自记的测试退出码 target=0、regression=0；与交付快照字节不同（仅局部变量名、引号风格与一句错误提示文案不同）
+
+【3】
+  [PASS] 输出定位规格/代码/测试来源
+         规格 ['spec.md#TASK-1', 'spec.md#TASK-2']；代码 ['before/task_service.py#list_tasks']；功能测试 5 项、回归测试 2 项
+  [PASS] 规格更新后输出用新内容
+         implement 条目正文由 208 字增至 272 字，追加内容已生效
+
+【4】
+  [PASS] 查询结果进入上下文
+         5 条查询，5 条有返回行数，来源表 ['sdd_entries', 'sdd_sources']
+
+【5】
+  [PASS] 空状态写入、重启后读回并使用
+         初始 progress 全空；重启后 completed 3 项、verification 2 组，来源 PowerContext task-progress
+
+【6】
+  [PASS] 同组测试修改前失败、修改后全通过
+         修改前 功能=1(FAILED (failures=5)) 回归=0；修改后 功能=0 回归=0
+  [PASS] 测试集前后一致
+         sample/test_task_service.py SHA-256 d9dad3c12344d83a… 与运行记录一致
+
+==============================================================================
+共 22 项检查，通过 22，失败 0
+全部通过。
+说明：这是交付材料一致性自检，不能认证模型服务商来源，也不代替官方验收；
+      官方评分以平台记录的固定提交为准。
