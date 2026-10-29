@@ -18,6 +18,7 @@ import json
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -102,53 +103,71 @@ def target_module(ctx):
     return Path(ctx['code_targets'][0]['path']).stem
 
 
-def check_output(ctx, output):
-    """输出文件必须存在，且文件名与目标模块一致。
+def check_output_name(ctx, output):
+    """生成**前**的校验：输出文件名必须与目标模块一致。
 
-    否则测试会 import 到别处的同名模块（例如上一次遗留的旧代码），自检结果不可信。
+    此时文件通常还不存在（模型还没生成），因此只校验名字，不校验存在性。
+    名字不一致会让测试导入到别的模块上，必须在调用模型之前就拒绝。
     """
     module = target_module(ctx)
     output = Path(output)
     if output.name != module + '.py':
         raise SystemExit(f'输出文件名 {output.name} 与目标模块 {module}.py 不一致，'
                          f'测试将导入到别的模块上')
-    if not output.is_file():
+    return module
+
+
+def check_output_exists(ctx, output):
+    """生成**后**、运行测试前的校验：本轮输出文件必须真实存在，且名字仍与目标模块一致。
+
+    路径配置错误要明确失败，不能吞掉——否则测试会跑到别处的同名模块上。
+    """
+    module = check_output_name(ctx, output)
+    if not Path(output).is_file():
         raise SystemExit(f'输出文件不存在: {output}')
     return module
 
 
 def run_tests(ctx, output):
-    """用上下文中的测试文件（seekdb 中的内容）运行功能与回归测试。"""
-    module = check_output(ctx, output)
+    """用上下文中的测试文件（seekdb 中的内容）运行功能与回归测试。
+
+    每轮都在**全新的临时目录**里执行：本轮产出的源码与上下文中的测试文件都复制进去，
+    只从该目录导入。这样保证测的确实是本轮产出的源码，也不会继承输出目录里上一轮
+    遗留的 __pycache__。
+
+    为什么必须用全新目录：Python 的字节码缓存以「源码 mtime（秒级）+ 字节数」校验，
+    同样字节数、同样 mtime 秒值的**错误源码**会直接命中上一轮留下的 .pyc，
+    于是错误代码被判为通过。全新目录里没有任何缓存，问题从根上消失。
+    """
+    module = check_output_exists(ctx, output)
     names = ctx['tests']['functional'] + ctx['tests']['regression']
     paths = sorted({name.split('#')[0] for name in names})
+    ids = [Path(name.split('#')[0]).stem + '.' + name.split('#')[1] for name in names]
     with tempfile.TemporaryDirectory() as temporary:
+        work = Path(temporary)
+        # 本轮产出的源码：按原始字节复制，不做任何换行转换
+        shutil.copyfile(Path(output).resolve(), work / (module + '.py'))
         for path in paths:
             content = next(row['content'] for row in ctx['sources'] if row['path'] == path)
-            (Path(temporary) / Path(path).name).write_text(content, encoding='utf-8')
-        ids = [Path(name.split('#')[0]).stem + '.' + name.split('#')[1] for name in names]
-        env = dict(os.environ, PYTHONPATH=os.pathsep.join([str(Path(output).resolve().parent), temporary]))
-        # 确认测试导入的确实是本次输出文件，而不是目录里残留的旧模块
-        probe = [sys.executable, '-c',
-                 'import importlib,pathlib,sys;'
-                 f'm=importlib.import_module({module!r});'
-                 f'sys.exit(0 if pathlib.Path(m.__file__).resolve()'
-                 f'==pathlib.Path({str(Path(output).resolve())!r}).resolve() else 3)']
-        probe_run = subprocess.run(probe, cwd=temporary, env=env, capture_output=True, text=True)
-        if probe_run.returncode != 0:
-            raise SystemExit('测试导入的模块不是本次输出文件：'
-                             + (probe_run.stderr or probe_run.stdout)[-500:])
+            (work / Path(path).name).write_text(content, encoding='utf-8')
         command = [sys.executable, '-B', '-m', 'unittest', '-v', *ids]
-        run = subprocess.run(command, cwd=temporary, env=env, capture_output=True, text=True)
+        env = dict(os.environ, PYTHONPATH=str(work))
+        # 模型给出的代码若有语法错误或导入异常，这里会变成测试失败（退出码非 0），
+        # 而不是直接中断流程——失败输出要交回模型继续修改。
+        run = subprocess.run(command, cwd=work, env=env, capture_output=True, text=True)
     return {'command': ['python', '-B', '-m', 'unittest', '-v', *ids], 'exit_code': run.returncode,
             'output': run.stdout + run.stderr}
+
+
+class NoCodeBlockError(Exception):
+    """模型的回复里没有可用的 Python 代码块。"""
 
 
 def extract_code(content):
     content = re.sub(r'<think>.*?</think>', '', content, flags=re.S)
     blocks = CODE_BLOCK.findall(content)
     if not blocks:
-        raise SystemExit('MiniMax 回复中没有 Python 代码块')
+        raise NoCodeBlockError('MiniMax 回复中没有 Python 代码块')
     return blocks[-1].rstrip() + '\n'
 
 
@@ -184,8 +203,8 @@ def main():
     before = next(row['content'] for row in ctx['sources'] if row['path'] == target['path'])
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    # 输出路径先校验：文件名必须与目标模块一致，避免测试导入到别的模块上
-    check_output(ctx, output)
+    # 生成前先校验：文件名必须与目标模块一致（此时文件还不存在，允许不存在）
+    check_output_name(ctx, output)
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%dT%H%M%SZ')
     evidence = Path(args.evidence_dir).resolve() if args.evidence_dir else EVIDENCE
     evidence.mkdir(parents=True, exist_ok=True)
@@ -195,14 +214,32 @@ def main():
         exchange_path = str(evidence / f'{stamp}-exchange.json')
     messages = [{'role': 'system', 'content': SYSTEM}, {'role': 'user', 'content': build_prompt(ctx)}]
     rounds, after, seconds, reply = [], before, 0.0, {}
+    produced = False
     for number in range(1, args.max_rounds + 1):
         request, reply, elapsed = call_minimax(messages, model, base_url, key)
         seconds += elapsed
         content = reply['choices'][0]['message']['content']
-        after = extract_code(content)
+        try:
+            after = extract_code(content)
+        except NoCodeBlockError as error:
+            # 模型没给出可用的代码：同样作为「本轮失败」交回模型继续修改，
+            # 不能直接中断——否则这一轮的请求与回复就丢了。
+            test_run = {'command': ['(模型回复中没有代码块)'], 'exit_code': 1, 'output': str(error)}
+            rounds.append({'round': number, 'elapsed_seconds': elapsed, 'request': request, 'response': reply,
+                           'code_sha256': None, 'tests': test_run})
+            print(f'round {number}: {error}', file=sys.stderr, flush=True)
+            messages = messages + [{'role': 'assistant', 'content': content},
+                                   {'role': 'user', 'content': '你的回复里没有可用的 Python 代码块。'
+                                    '请只回复一个 Python 代码块，内容是修改后的完整文件。'}]
+            continue
         # 按 MiniMax 原样字节写入（不做换行转换），与记录中的 SHA-256 一致
         output.write_text(after, encoding='utf-8', newline='\n')
-        # 开发助手的自检：运行上下文给出的功能与回归测试
+        produced = True
+        # 生成后、运行测试前：校验本轮输出文件真实存在
+        check_output_exists(ctx, output)
+        # 开发助手的自检：运行上下文给出的功能与回归测试。
+        # 语法错误、导入异常、断言失败都表现为测试失败（退出码非 0），
+        # 失败输出会交回模型继续修改，不会提前中断整个流程。
         test_run = run_tests(ctx, output)
         rounds.append({'round': number, 'elapsed_seconds': elapsed, 'request': request, 'response': reply,
                        'code_sha256': hashlib.sha256(after.encode()).hexdigest(), 'tests': test_run})
@@ -214,7 +251,7 @@ def main():
                                {'role': 'user', 'content': '运行上下文中的测试未全部通过，输出如下。请依据规格条目修正，'
                                 '不要修改测试，再返回完整代码文件。\n```\n' + test_run['output'][-4000:] + '\n```'}]
     diff = ''.join(difflib.unified_diff(before.splitlines(True), after.splitlines(True),
-                                        f"a/{target['path']}", f'b/{output.as_posix()}'))
+                                        f"a/{target['path']}", f'b/{output.as_posix()}')) if produced else ''
     record = {
         'time_utc': stamp, 'endpoint': base_url.rstrip('/') + '/chat/completions', 'model': model,
         'elapsed_seconds': round(seconds, 2), 'context_command': context_command[1:],
@@ -224,7 +261,8 @@ def main():
         'rounds': redact_thinking(rounds),   # 每轮完整请求（不含 Authorization 头）、回复与测试结果；<think> 段落已脱敏
         'output_file': output.as_posix(),
         'before_sha256': hashlib.sha256(before.encode()).hexdigest(),
-        'after_sha256': hashlib.sha256(after.encode()).hexdigest(),
+        # 没有产出代码时 after_sha256 为 None：不能拿修改前的哈希冒充产出
+        'after_sha256': hashlib.sha256(after.encode()).hexdigest() if produced else None,
         '_redaction': '回复中的模型私有思维链段落（think 标签包裹）已替换为占位说明，不随作品提交；'
                       '响应 ID、usage、生成的代码与测试结果原样保留。',
     }

@@ -22,10 +22,17 @@ import hashlib
 import json
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT))
+
+from minimax_agent import NoCodeBlockError, build_prompt, extract_code  # noqa: E402
+
 results = []
 
 
@@ -196,66 +203,232 @@ check(2, 'API 交付副本已脱敏且保留关键证据', no_think and has_code
       f"无思维链标记={no_think} 保留代码块={has_code} 保留测试结果={has_tests} "
       f"脱敏说明={bool(api_json.get('_redaction'))}")
 
-# 实时调用记录：每次实时运行的证据都在 evidence/run/<运行编号>/ 下，
-# 里面有真实的请求、回复（响应 ID、usage）、生成的代码与测试结果。
-live_runs = []
-for run_dir in sorted((ROOT / 'evidence' / 'run').glob('*/')):
-    for exchange in sorted(run_dir.glob('*-exchange.json')):
-        record = json.loads(exchange.read_text(encoding='utf-8'))
-        rounds = record.get('rounds') or []
-        if not rounds:
-            continue
-        last = rounds[-1]
-        live_runs.append({
-            'dir': run_dir.name, 'exchange': exchange.name,
-            'model': record.get('model'), 'endpoint': record.get('endpoint'),
-            'id': last.get('response', {}).get('id'),
-            'usage': last.get('response', {}).get('usage', {}).get('total_tokens'),
-            'tests_exit': last.get('tests', {}).get('exit_code'),
-            'code_sha': last.get('code_sha256'),
-            'produced': (run_dir / 'task_service.py'),
-        })
-live_ok = [r for r in live_runs if r['tests_exit'] == 0 and r['id'] and r['usage']
-           and r['produced'].is_file()]
-check(2, '存在实时调用的完整记录', bool(live_ok),
-      f'共 {len(live_runs)} 次实时调用记录，其中 {len(live_ok)} 次测试通过且响应 ID/usage/代码齐备'
-      + (f'；最新一次 model={live_ok[-1]["model"]} response_id={live_ok[-1]["id"]} '
-         f'usage={live_ok[-1]["usage"]} 产出={live_ok[-1]["code_sha"][:16]}…' if live_ok else ''))
+# ---------------------------------------------------------------- 辅助函数
+def sha256_text(text):
+    """文本按 LF 归一化后的 SHA-256（模型产出的代码本身就是 LF）。"""
+    return hashlib.sha256(text.replace('\r\n', '\n').encode('utf-8')).hexdigest()
 
-# 实时产出的代码必须与交付快照功能等价：它跑的是同一份测试文件，且全部通过
-if live_ok:
-    produced = live_ok[-1]['produced']
-    produced_sha = hashlib.sha256(produced.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
-    same_bytes = produced_sha == delivered
-    live_steps = read_json(f'evidence/run/{live_ok[-1]["dir"]}/steps.json')
-    live_by = {s['step']: s for s in live_steps}
-    live_tests_ok = (live_by.get('tests-after-target', {}).get('exit_code') == 0
-                     and live_by.get('tests-after-regression', {}).get('exit_code') == 0)
-    live_tests_sha = read_json(f'evidence/run/{live_ok[-1]["dir"]}/summary.json').get('tests_sha256') or ''
-    # 真正验证功能等价：把**交付的**测试文件与实时产出的代码放在一起跑。
-    # 不能只比哈希 —— 摘要是在产出它的那台机器上算的（Windows 上可能是 CRLF、Linux 上是 LF），
-    # 跨平台比对摘要必然对不上。实跑一遍才是与平台无关的证明。
-    import shutil as _shutil
-    import subprocess as _subprocess
-    import tempfile as _tempfile
-    with _tempfile.TemporaryDirectory() as temporary:
+
+def run_delivered_tests(produced):
+    """把交付的测试文件与归档产出的代码放在一起实跑一遍。
+
+    这是与平台无关的证明：不依赖任何一台上机器算出来的哈希。
+    """
+    with tempfile.TemporaryDirectory() as temporary:
         work = Path(temporary)
-        _shutil.copyfile(produced, work / 'task_service.py')
-        _shutil.copyfile(ROOT / 'sample' / 'test_task_service.py', work / 'test_task_service.py')
+        shutil.copyfile(produced, work / 'task_service.py')
+        shutil.copyfile(ROOT / 'sample' / 'test_task_service.py', work / 'test_task_service.py')
         env = dict(os.environ, PYTHONPATH=str(work))
-        probe = _subprocess.run([sys.executable, '-B', '-m', 'unittest', 'test_task_service'],
-                                cwd=work, env=env, capture_output=True, text=True)
-    ran_7 = 'Ran 7 tests' in probe.stderr
-    equivalent = probe.returncode == 0 and ran_7
-    local_raw = sha256(ROOT / 'sample' / 'test_task_service.py')
-    same_tests = live_tests_sha in (local_raw, sha256_lf(ROOT / 'sample' / 'test_task_service.py'))
-    check(2, '实时产出与交付快照功能等价',
-          live_tests_ok and equivalent,
-          f'把交付的测试文件与实时产出的代码放在一起实跑：{probe.stderr.strip().splitlines()[-1]}'
-          f'（{ran_7 and "7 项全通过" or "用例数不符"}）'
-          f'；该次运行自记的测试退出码 target={live_by.get("tests-after-target", {}).get("exit_code")}、'
-          f'regression={live_by.get("tests-after-regression", {}).get("exit_code")}'
-          + ('' if same_bytes else '；与交付快照字节不同（仅局部变量名、引号风格与一句错误提示文案不同）'))
+        return subprocess.run([sys.executable, '-B', '-m', 'unittest', 'test_task_service'],
+                              cwd=work, env=env, capture_output=True, text=True)
+
+
+def context_of_run(run_dir):
+    """取该次运行交给 MiniMax 的上下文：steps.json 里 context-before-change 步骤的输出。"""
+    steps_path = run_dir / 'steps.json'
+    if not steps_path.is_file():
+        return None, '缺少 steps.json'
+    try:
+        steps = json.loads(steps_path.read_text(encoding='utf-8'))
+    except ValueError as error:
+        return None, f'steps.json 解析失败: {error}'
+    for step in steps:
+        if step.get('step') == 'context-before-change':
+            try:
+                return json.loads(step.get('stdout') or ''), None
+            except ValueError as error:
+                return None, f'context-before-change 输出解析失败: {error}'
+    return None, 'steps.json 里没有 context-before-change 步骤'
+
+
+def live_archive_problems(run_dir, summary, local_tests_raw, local_tests_lf):
+    """逐份核对一份「声明成功且是实时调用」的归档，返回不一致之处。
+
+    返回的每一条都带运行编号与具体位置，便于定位。
+    """
+    problems = []
+    name = run_dir.name
+    exchanges = sorted(run_dir.glob('*-exchange.json'))
+    if not exchanges:
+        return [f'{name}: 缺少 exchange 记录']
+    exchange = json.loads(exchanges[0].read_text(encoding='utf-8'))
+    rounds = exchange.get('rounds') or []
+    if not rounds:
+        return [f'{name}: exchange 的 rounds 为空']
+
+    # 1) 每轮都要有响应 ID、usage、代码哈希；并复算该轮的 code_sha256
+    for item in rounds:
+        number = item.get('round')
+        response = item.get('response') or {}
+        if not response.get('id'):
+            problems.append(f'{name}: 第 {number} 轮缺响应 ID')
+        if not response.get('usage'):
+            problems.append(f'{name}: 第 {number} 轮缺 usage')
+        if not item.get('code_sha256'):
+            problems.append(f'{name}: 第 {number} 轮缺 code_sha256')
+            continue
+        try:
+            code = extract_code(response['choices'][0]['message']['content'])
+        except (NoCodeBlockError, KeyError, IndexError, TypeError) as error:
+            problems.append(f'{name}: 第 {number} 轮回复中提取不出代码（{error}）')
+            continue
+        actual = sha256_text(code)
+        if actual != item['code_sha256']:
+            problems.append(f'{name}: 第 {number} 轮的 code_sha256 与回复中的代码不符'
+                            f'（记录 {item["code_sha256"][:16]}… / 复算 {actual[:16]}…）')
+
+    # 2) 末轮必须测试通过
+    last = rounds[-1]
+    if (last.get('tests') or {}).get('exit_code') != 0:
+        problems.append(f'{name}: 末轮测试未通过'
+                        f'（exit_code={(last.get("tests") or {}).get("exit_code")}）')
+
+    # 3) 产出文件必须在归档里
+    produced = run_dir / 'task_service.py'
+    if not produced.is_file():
+        problems.append(f'{name}: 缺少产出文件 task_service.py')
+        produced_sha_lf = produced_sha_raw = ''
+    else:
+        produced_sha_lf = sha256_lf(produced)
+        produced_sha_raw = sha256(produced)
+
+    # 4) 末轮回复代码 / exchange 产出摘要 / 归档源码 / summary 产出摘要必须互相对应
+    try:
+        last_sha = sha256_text(extract_code(last['response']['choices'][0]['message']['content']))
+    except (NoCodeBlockError, KeyError, IndexError, TypeError):
+        last_sha = ''
+    exchange_after = exchange.get('after_sha256') or ''
+    summary_after = summary.get('after_sha256') or ''
+    if last_sha and exchange_after and last_sha != exchange_after:
+        problems.append(f'{name}: 末轮回复中的代码与 exchange.after_sha256 不符'
+                        f'（{last_sha[:16]}… / {exchange_after[:16]}…）')
+    if produced_sha_lf and exchange_after and produced_sha_lf != exchange_after:
+        problems.append(f'{name}: 归档源码与 exchange.after_sha256 不符'
+                        f'（LF 归一化 {produced_sha_lf[:16]}… / {exchange_after[:16]}…）')
+    if summary_after and exchange_after and summary_after != exchange_after:
+        # summary 记的是产出它那台机器上的原始字节；跨平台只与 LF 归一化形式可比
+        if summary_after not in (produced_sha_lf, produced_sha_raw):
+            problems.append(f'{name}: summary 的产出摘要与 exchange / 归档源码不符'
+                            f'（{summary_after[:16]}…）')
+
+    # 5) 首轮请求必须就是这次上下文构造出的提示
+    ctx, error = context_of_run(run_dir)
+    if ctx is None:
+        problems.append(f'{name}: 取不到交给 MiniMax 的上下文（{error}）')
+    else:
+        try:
+            expected = build_prompt(ctx)
+        except Exception as error:                       # noqa: BLE001
+            expected = None
+            problems.append(f'{name}: 用该上下文构造提示失败（{error}）')
+        if expected is not None:
+            messages = (rounds[0].get('request') or {}).get('messages') or []
+            actual = next((m.get('content', '') for m in reversed(messages)
+                           if m.get('role') == 'user'), '')
+            if actual != expected:
+                problems.append(f'{name}: 首轮请求的任务提示与该次 context-before-change 不一致')
+
+    # 6) 测试来源与测试摘要
+    recorded_lf = summary.get('tests_sha256_lf')
+    recorded_raw = summary.get('tests_sha256')
+    if recorded_lf:
+        same_tests = recorded_lf == local_tests_lf
+    else:
+        same_tests = recorded_raw in (local_tests_raw, local_tests_lf)
+    if not same_tests:
+        problems.append(f'{name}: 该次运行记录的测试文件哈希与交付的测试文件不一致'
+                        f'（记录 {str(recorded_lf or recorded_raw)[:16]}… / 交付 '
+                        f'{local_tests_lf[:16]}…）')
+    steps_path = run_dir / 'steps.json'
+    if steps_path.is_file():
+        try:
+            steps = json.loads(steps_path.read_text(encoding='utf-8'))
+        except ValueError:
+            steps = []
+        by_step = {s.get('step'): s for s in steps}
+        for step_name in ('tests-after-target', 'tests-after-regression'):
+            if by_step.get(step_name, {}).get('exit_code') != 0:
+                problems.append(f'{name}: 该次运行的 {step_name} 未通过'
+                                f'（exit_code={by_step.get(step_name, {}).get("exit_code")}）')
+
+    # 7) 对归档产出实跑交付的同一组业务测试
+    if produced.is_file():
+        run = run_delivered_tests(produced)
+        if run.returncode != 0 or 'Ran 7 tests' not in run.stderr:
+            last_line = (run.stderr.strip().splitlines() or [''])[-1]
+            problems.append(f'{name}: 归档产出跑交付的同一组业务测试未通过（{last_line}）')
+    return problems
+
+
+# 实时调用归档：只挑选「声明成功且是实时调用」的归档，对这些**逐份**严格验证。
+# 不能先过滤掉损坏的、再拿旧的成功记录顶替——那样损坏的成功归档会被静默放过。
+live_archives, ordinary_archives, unreadable = [], [], []
+for run_dir in sorted((ROOT / 'evidence' / 'run').glob('*/')):
+    summary_path = run_dir / 'summary.json'
+    if not summary_path.is_file():
+        continue
+    try:
+        summary = json.loads(summary_path.read_text(encoding='utf-8'))
+    except ValueError as error:
+        unreadable.append(f'{run_dir.name}（{error}）')
+        continue
+    if summary.get('result') == 'PASS' and summary.get('minimax') == 'live':
+        live_archives.append((run_dir, summary))
+    else:
+        ordinary_archives.append(run_dir.name)
+
+check(2, '归档的 summary.json 均可解析', not unreadable,
+      '全部归档的 summary.json 均可解析' if not unreadable
+      else f'无法解析的归档：{unreadable}')
+
+local_tests_raw = sha256(ROOT / 'sample' / 'test_task_service.py')
+local_tests_lf = sha256_lf(ROOT / 'sample' / 'test_task_service.py')
+
+archive_problems = []
+for run_dir, summary in live_archives:
+    archive_problems.extend(live_archive_problems(run_dir, summary, local_tests_raw, local_tests_lf))
+check(2, '实时成功归档逐份材料自洽', bool(live_archives) and not archive_problems,
+      f'共 {len(live_archives)} 份声明成功且为实时调用的归档（{sorted(d.name for d, _ in live_archives)}），'
+      f'逐份核对通过；另有 {len(ordinary_archives)} 份非实时成功归档不参与本项判定'
+      if live_archives and not archive_problems
+      else (('不一致：' + '；'.join(archive_problems)) if archive_problems
+            else '没有找到声明成功且为实时调用的归档'))
+
+
+def record_time(run_dir):
+    """归档的记录时间：取 exchange 里的 time_utc。"""
+    for exchange in sorted(run_dir.glob('*-exchange.json')):
+        try:
+            record = json.loads(exchange.read_text(encoding='utf-8'))
+        except ValueError:
+            continue
+        stamp = record.get('time_utc')
+        if stamp:
+            return stamp
+    return ''
+
+
+# 最新一次实时调用按**记录时间**选择，不按目录名字典序（字典序只是目录名的偶然顺序）
+timed = sorted(((record_time(run_dir), run_dir.name) for run_dir, _ in live_archives))
+check(2, '最新实时调用按记录时间选出', bool(timed),
+      f'共 {len(live_archives)} 份实时成功归档；按 exchange 的 time_utc 排序，'
+      f'最新的是 {timed[-1][1]}（{timed[-1][0]}）' if timed else '没有实时成功归档')
+
+# 实时产出的代码**不要求**与交付快照 sample/after/task_service.py 逐字节相同。
+# 结论只写「通过交付的同一组业务测试」，不据七个用例宣称所有输入下完全等价。
+if timed:
+    latest = next(run_dir for run_dir, _ in live_archives if run_dir.name == timed[-1][1])
+    produced = latest / 'task_service.py'
+    if produced.is_file():
+        probe_run = run_delivered_tests(produced)
+        ran_7 = 'Ran 7 tests' in probe_run.stderr
+        last_line = (probe_run.stderr.strip().splitlines() or [''])[-1]
+        check(2, '最新实时产出通过交付的同一组业务测试', probe_run.returncode == 0 and ran_7,
+              f'把交付的 test_task_service.py 与归档产出放在一起实跑：{last_line}'
+              f'（未要求与交付快照逐字节相同）')
+    else:
+        check(2, '最新实时产出通过交付的同一组业务测试', False,
+              f'归档 {latest.name} 里没有产出文件')
 
 # ------------------------------------------------------------- 3 上下文正确
 initial = read_json('evidence/run/context-initial.json')
