@@ -50,6 +50,11 @@ def build_prompt(ctx):
     for entry in ctx['spec_entries']:
         lines += [f"### [{entry['role']}] {entry['source']} 第{entry['lines'][0]}-{entry['lines'][1]}行 {entry['title']}",
                   entry['text'], '']
+    inactive = ctx.get('inactive_spec_entries', [])
+    if inactive:
+        lines.append('## 已失效的规格条目（仅供知晓，不得作为要求）')
+        lines += [f"- {e['source']} {e['title']}：{e.get('reason', e['status'])}" for e in inactive]
+        lines.append('')
     lines.append('## 需要修改的代码')
     for target in ctx['code_targets']:
         lines += [f"- {target['source']}（{target['type']}，第{target['lines'][0]}-{target['lines'][1]}行）"]
@@ -63,7 +68,17 @@ def build_prompt(ctx):
     progress = ctx['progress']
     lines += ['', '## 任务进展（来自 PowerContext）',
               '已完成：' + ('；'.join(progress['completed']) or '无'),
-              '待办：' + ('；'.join(progress['todo']) or '无')]
+              '待办：' + ('；'.join(progress['todo']) or '无'),
+              '已有验证结果（validity：current 仍适用于当前规格/代码/测试；stale 依据已变化，仅作历史参考）：']
+    validity = {'current': '仍适用', 'stale': '已过期', 'unknown': '版本未知'}
+    for record in progress.get('verification', []):
+        changed = '、'.join(record.get('changed', []))
+        exits = (f"功能+回归测试退出码 {record['combined_exit']}" if 'combined_exit' in record else
+                 f"功能测试退出码 {record.get('target_exit', '?')}，回归测试退出码 {record.get('regression_exit', '?')}")
+        lines.append(f"- {record.get('stage', '?')}：{exits}，"
+                     f"{validity.get(record.get('validity'), '版本未知')}" + (f'（变化：{changed}）' if changed else ''))
+    if not progress.get('verification'):
+        lines.append('- 无')
     lines += ['', '请返回修改后的完整代码文件。']
     return '\n'.join(lines)
 
@@ -179,11 +194,20 @@ def main():
                           'exchange': f'evidence/minimax-api/{stamp}-exchange.json',
                           'usage': reply.get('usage')}, ensure_ascii=False, indent=2))
         return
-    # 任务进展写回 PowerContext：下一次 context 会看到“已修改、待测试”
+    # 任务进展写回 PowerContext：下一次 context 会看到“已修改、待正式测试”。
+    # 旧验证结果保留为历史（下次 context 会按版本重新判定是否适用）；本轮自检绑定本轮输出的代码版本，
+    # 不把旧的通过记录当作新代码的证据。
+    history = [{k: v for k, v in record.items() if k not in ('validity', 'changed')}
+               for record in ctx['progress']['verification']]
+    self_check = {'stage': 'minimax-self-check', 'round': len(rounds),
+                  'combined_exit': rounds[-1]['tests']['exit_code'],   # 功能与回归测试同一条命令
+                  'basis': {'spec_sha256': ctx['basis']['spec_sha256'],
+                            'code_sha256': {target['path']: hashlib.sha256(after.replace('\r\n', '\n').encode()).hexdigest()},
+                            'tests_sha256': ctx['basis']['tests_sha256']}}
     state = {'task': args.task,
              'completed': ctx['progress']['completed'] + [f'MiniMax（{model}）已依据上下文修改 {target["symbol"]}'],
-             'todo': ['运行功能测试与回归测试并记录结果'],
-             'tests': ctx['progress']['verification'],
+             'todo': ['重新导入修改后的代码，运行功能测试与回归测试并记录结果'],
+             'tests': history + [self_check],
              'minimax_exchange': f'evidence/minimax-api/{stamp}-exchange.json'}
     with tempfile.TemporaryDirectory() as temporary:
         state_file = Path(temporary) / 'state.json'
