@@ -11,8 +11,10 @@
          run_id=8ef54fe34756 git_revision=00f1a9ababb67b531ef2a743a9309bb8a8fa7968 result=PASS
   [PASS] 步骤日志含命令与退出码
          15 步均有 command/exit_code
-  [PASS] 验收文档引用当前运行记录
-         ACCEPTANCE.md 同时含 run_id 8ef54fe34756 与 git_revision 00f1a9ababb67b531ef2a743a9309bb8a8fa7968
+  [PASS] 验收文档引用归档的真实运行记录
+         文档引用 ['8ef54fe34756']，其中 ['8ef54fe34756'] 在 evidence/run/ 下有归档，且归档的提交号与文档一致
+  [PASS] 最近一次成功运行有归档副本
+         evidence/run/summary.json 的 run_id=8ef54fe34756 在归档中
 
 【2】
   [PASS] 平台记录了本轮模型
@@ -53,7 +55,7 @@
          sample/test_task_service.py SHA-256 2c01d2de7e49987f… 与运行记录一致
 
 ==============================================================================
-共 19 项检查，通过 19，失败 0
+共 20 项检查，通过 20，失败 0
 全部通过。
 说明：这是交付材料一致性自检，不能认证模型服务商来源，也不代替官方验收；
       官方评分以平台记录的固定提交为准。

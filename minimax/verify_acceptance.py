@@ -79,15 +79,38 @@ check(1, '验证样例已跑通', run.get('result') == 'PASS',
 bad = [s['step'] for s in steps if 'command' not in s or 'exit_code' not in s]
 check(1, '步骤日志含命令与退出码', not bad, f'{len(steps)} 步均有 command/exit_code' if not bad else str(bad))
 
-# 验收文档必须引用当前保留的那次真实运行记录，避免文档与证据脱节
+# 验收文档必须引用**归档在交付中**的真实运行记录，避免文档与证据脱节。
+# 注意：不能拿根目录的 summary.json 来比——评审自行复跑后它会被更新，
+# 文档引用的是交付时归档的那次运行（evidence/run/<运行编号>/）。
 acceptance_text = (ROOT / 'ACCEPTANCE.md').read_text(encoding='utf-8')
-run_id = str(run.get('run_id') or '')
-revision = str(run.get('git_revision') or '')
-check(1, '验收文档引用当前运行记录', bool(run_id) and bool(revision)
-      and run_id in acceptance_text and revision in acceptance_text,
-      f'ACCEPTANCE.md 同时含 run_id {run_id} 与 git_revision {revision}'
-      if run_id in acceptance_text and revision in acceptance_text
-      else f'ACCEPTANCE.md 未引用当前运行的 run_id={run_id} / git_revision={revision}')
+cited_runs = set(re.findall(r'\b[0-9a-f]{12}\b', acceptance_text))
+cited_revisions = set(re.findall(r'\b[0-9a-f]{40}\b', acceptance_text))
+archived = {}
+for run_dir in (ROOT / 'evidence' / 'run').glob('*/summary.json'):
+    try:
+        record = json.loads(run_dir.read_text(encoding='utf-8'))
+    except ValueError:
+        continue
+    archived[record.get('run_id')] = (record.get('git_revision'), run_dir.parent)
+matched = [rid for rid in cited_runs
+           if rid in archived and archived[rid][0] in cited_revisions]
+missing_archives = [rid for rid in cited_runs if rid not in archived]
+if matched and not missing_archives:
+    detail = (f'文档引用 {sorted(cited_runs)}，其中 {sorted(matched)} 在 evidence/run/ 下有归档，'
+              f'且归档的提交号与文档一致')
+elif missing_archives:
+    detail = f'文档引用的运行 {sorted(cited_runs)} 中未归档的有 {missing_archives}'
+else:
+    detail = (f'文档引用的运行 {sorted(cited_runs)} 的提交号与归档 {sorted(cited_revisions)} 对不上')
+check(1, '验收文档引用归档的真实运行记录',
+      bool(cited_runs) and bool(cited_revisions) and bool(matched) and not missing_archives,
+      detail)
+
+# 根目录的「最近一次成功运行」必须也能在归档里找到对应记录
+top_run = run.get('run_id')
+check(1, '最近一次成功运行有归档副本', top_run in archived,
+      f'evidence/run/summary.json 的 run_id={top_run} '
+      f'{"在归档中" if top_run in archived else "缺少归档"}')
 
 # ------------------------------------------------------- 2 MiniMax 实际参与
 platform = ROOT / 'evidence' / 'workbuddy-minimax' / 'platform-record'
