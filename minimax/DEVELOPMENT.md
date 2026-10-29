@@ -24,11 +24,13 @@
 
 - 接入方式：HTTP，OpenAI 兼容 Chat Completions，`https://api.minimaxi.com/v1/chat/completions`，模型 `MiniMax-M3`，temperature 0.2；入口 `minimax_agent.py`。API Key 由环境变量提供，未写入任何文件。
 - 提供的上下文：`evidence/minimax-api/ci-context-before-change.json`，即 `run_demo.py` 在干净 Linux 环境（GitHub Actions，seekdb 官方镜像 + PowerContext）中 `context-before-change` 步骤的真实输出。
-- 过程（`evidence/minimax-api/20261028T010349Z-exchange.json`，含每轮完整请求、原始回复、代码哈希与测试输出）：
+- 过程（`evidence/minimax-api/20261028T010349Z-exchange.json`，含每轮完整请求、回复、代码哈希与测试输出）：
   - 第 1 轮（21.9 秒，1393 tokens）：实现了筛选，但把记录中的 status 也做了 strip，`FeatureTests.test_done` 失败（规格只要求记录 status 做 casefold）。
   - 第 2 轮（4.9 秒，2010 tokens）：助手把失败输出交回 MiniMax，MiniMax 去掉对记录 status 的 strip，7 个测试全部通过。
+- **该文件是脱敏后的交付副本**：回复中的模型私有思维链段落（think 标签包裹）已替换为占位说明，未随作品提交；每轮的响应 ID（`07307cf6…`、`07307d0c…`）、`usage`（含 prompt/completion/reasoning tokens）、生成的代码块与测试结果原样保留，文件顶部的 `_redaction` 字段写明了脱敏范围与被移除的字符数（2283）。因此它**不是未经处理的完整原始回复**，只是可核对的交付副本。
+  `minimax_agent.py` 现在写出交互记录时会自动做同样的脱敏，后续实时运行不会再把思维链写进仓库。
 - 代码差异：`evidence/minimax-api/20261028T010349Z-change.diff`；该版本的完整文件另存为 `evidence/minimax-api/20261028T010349Z-task_service.py`（SHA-256 `8b9c31f7af6e8d3b0bfb634f9d1ae9ad9c6c7189d4b02e69ed9693f6ca6fe4f0`）。
-- 运行方式：`python minimax_agent.py --context-file evidence/minimax-api/ci-context-before-change.json --output <输出路径>`。配置 `MINIMAX_API_KEY` 后，`python run_demo.py` 可在同一流程内实时调用 MiniMax。
+- 运行方式：`python minimax_agent.py --context-file evidence/minimax-api/ci-context-before-change.json --output <输出路径>`。配置 `MINIMAX_API_KEY` 后，`python run_demo.py` 可在同一流程内实时调用 MiniMax；本次运行的证据会写在 `evidence/run/<运行编号>/` 下，不会覆盖交付的业务快照。
 
 ## 三、最早的网页会话（未采用为最终代码）
 
@@ -47,4 +49,4 @@
 python verify_platform_record.py     # 只依赖交付目录内的文件
 ```
 
-**缺口**：平台改动日志记录的是文件改动（含逐行 diff），不是模型的消息原文；WorkBuddy 未提供整段会话的导出功能，因此没有"平台导出的完整对话文件"。模型私有思维链不提交。本轮未额外调用付费 MiniMax API。
+**缺口**：平台改动日志记录的是文件改动（含逐行 diff），不是模型的消息原文；WorkBuddy 未提供整段会话的导出功能，因此没有"平台导出的完整对话文件"。模型私有思维链不提交——交付的 API 交互记录已脱敏（见第二节）。本轮未额外调用付费 MiniMax API。

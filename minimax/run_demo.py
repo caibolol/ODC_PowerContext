@@ -28,7 +28,27 @@ REGRESSION_TESTS = ['RegressionTests']   # 原有行为回归测试（修改前�
 steps = []
 
 
-def wait_for_services(timeout):
+def probe_database(host, port, user, password):
+    try:
+        pymysql.connect(host=host, port=port, user=user, password=password, connect_timeout=3).close()
+        return True
+    except Exception:
+        return False
+
+
+def probe_powercontext(opener, pc_url):
+    """只认预期的正常响应：200。
+
+    任何 HTTP 错误（含 503）与连接失败都算未就绪——服务真的没起来时不能误判为就绪。
+    """
+    try:
+        with opener.open(pc_url + '/openapi.json', timeout=3) as response:
+            return response.status == 200
+    except Exception:
+        return False
+
+
+def wait_for_services(timeout, db_probe=None, pc_probe=None, interval=2):
     """等待 seekdb 与 PowerContext 就绪，返回仍未就绪的服务名列表。
 
     seekdb 冷启动需要数秒到数十秒（容器内更久），刚起就连接会失败，
@@ -39,26 +59,18 @@ def wait_for_services(timeout):
     pc_url = os.getenv('PC_URL', 'http://127.0.0.1:18752').rstrip('/')
     # 本机服务必须直连，不能走环境里的 HTTP 代理
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    db_probe = db_probe or (lambda: probe_database(host, port, os.getenv('DB_USER', 'root'),
+                                                   os.getenv('DB_PASSWORD', '')))
+    pc_probe = pc_probe or (lambda: probe_powercontext(opener, pc_url))
     pending = {'seekdb': True, 'PowerContext': True}
     deadline = time.time() + timeout
     while any(pending.values()) and time.time() < deadline:
-        if pending['seekdb']:
-            try:
-                pymysql.connect(host=host, port=port, user=os.getenv('DB_USER', 'root'),
-                                password=os.getenv('DB_PASSWORD', ''), connect_timeout=3).close()
-                pending['seekdb'] = False
-            except Exception:
-                pass
-        if pending['PowerContext']:
-            try:
-                opener.open(pc_url + '/openapi.json', timeout=3).read()
-                pending['PowerContext'] = False
-            except urllib.error.HTTPError:
-                pending['PowerContext'] = False   # 服务已有应答，只是该路径不允许
-            except Exception:
-                pass
+        if pending['seekdb'] and db_probe():
+            pending['seekdb'] = False
+        if pending['PowerContext'] and pc_probe():
+            pending['PowerContext'] = False
         if any(pending.values()):
-            time.sleep(2)
+            time.sleep(interval)
     return [name for name, waiting in pending.items() if waiting]
 
 
@@ -97,10 +109,14 @@ def main():
     args = parser.parse_args()
     OUT.mkdir(parents=True, exist_ok=True)
     run_id = uuid.uuid4().hex[:12]
+    # 本次运行的证据按运行编号单独存放；OUT 根目录只保留「最近一次成功运行」的固定文件。
+    run_dir = OUT / run_id
+    run_dir.mkdir(parents=True, exist_ok=True)
     project, task = f'taskboard-{run_id}', 'TASK-2'
     py = [sys.executable, str(ROOT / 'context.py')]
     summary = {'run_id': run_id, 'git_revision': git_revision(), 'project': project, 'task': task,
                'minimax': 'recorded' if args.recorded else 'live'}
+    passed = False
     try:
         with tempfile.TemporaryDirectory() as temporary:
             # 独立副本：规格更新、MiniMax 输出都写在副本中，仓库原始样例不变
@@ -153,8 +169,10 @@ def main():
                 step('minimax-recorded', [sys.executable, '-c', 'print("使用仓库中已记录的 MiniMax 输出")'], parse=False)
             else:
                 step('minimax', [sys.executable, str(ROOT / 'minimax_agent.py'), '--project', project,
-                                 '--task', task, '--scope', scope_id, '--output', str(work / 'task_service.py')])
-                shutil.copy(work / 'task_service.py', ROOT / 'sample' / 'after' / 'task_service.py')
+                                 '--task', task, '--scope', scope_id, '--output', str(work / 'task_service.py'),
+                                 '--evidence-dir', str(run_dir)])
+                # 只把本次产出存进本次运行的证据目录，不覆盖交付的固定业务快照 sample/after/
+                shutil.copyfile(work / 'task_service.py', run_dir / 'task_service.py')
             after_sha = sha(work / 'task_service.py')
 
             # 5. 修改后：同一组目标测试与回归测试全部通过
@@ -187,13 +205,25 @@ def main():
 
             for name, value in (('context-initial', initial), ('context-restored', restored),
                                 ('context-updated', updated)):
-                (OUT / f'{name}.json').write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
+                (run_dir / f'{name}.json').write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding='utf-8')
             summary.update({'before_sha256': before_sha, 'after_sha256': after_sha, 'tests_sha256': tests_sha,
                             'result': 'PASS'})
+            passed = True
             print('PASS')
+    except Exception as error:
+        summary['error'] = f'{type(error).__name__}: {error}'
+        raise
     finally:
-        (OUT / 'steps.json').write_text(json.dumps(steps, ensure_ascii=False, indent=2), encoding='utf-8')
-        (OUT / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+        if not passed:
+            summary['result'] = 'FAIL'
+        # 本次运行的证据始终写入自己的目录；失败也不会破坏已有成功证据
+        (run_dir / 'steps.json').write_text(json.dumps(steps, ensure_ascii=False, indent=2), encoding='utf-8')
+        (run_dir / 'summary.json').write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding='utf-8')
+        if passed:
+            # 只有成功才刷新「最近一次成功运行」的固定文件
+            for name in ('steps.json', 'summary.json', 'context-initial.json',
+                         'context-restored.json', 'context-updated.json'):
+                shutil.copyfile(run_dir / name, OUT / name)
 
 
 if __name__ == '__main__':

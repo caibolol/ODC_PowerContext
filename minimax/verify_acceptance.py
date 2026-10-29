@@ -1,10 +1,14 @@
-"""机械判定官方六项必做项，逐项给出依据。
+"""交付材料一致性自检：按官方六项必做项逐项判定交付目录内的材料是否齐备、自洽。
 
 用法（在 minimax/ 目录下）：
     python verify_acceptance.py
 
 只读取交付目录内的文件，不访问数据库、不联网、不需要本机 WorkBuddy 安装。
 全部通过时退出码为 0，任一项不通过为 1。
+
+**这个脚本的边界**：它只核对「交付材料之间是否一致、是否真实存在于提交中」。
+它**不能**认证模型服务商来源、不能证明回复确实由某个服务商生成，也**不能代替官方验收**。
+官方评分以平台记录的固定提交为准。
 
 题面六项：
   1 能够运行      按运行说明可以初始化数据、启动模块并执行验证样例，不依赖未交付的本地文件或状态
@@ -44,7 +48,7 @@ def sha256_lf(path):
 # ---------------------------------------------------------------- 1 能够运行
 need = ['README.md', 'TECHNICAL.md', 'ACCEPTANCE.md', 'DEVELOPMENT.md', 'requirements.txt',
         'requirements-windows-lock.txt', 'context.py', 'minimax_agent.py', 'run_demo.py',
-        'verify_sample.py', 'verify_context.py', 'verify_platform_record.py',
+        'verify_sample.py', 'verify_context.py', 'verify_platform_record.py', 'test_tooling.py',
         'start-seekdb.ps1', 'start-powercontext.ps1',
         'sample/spec.md', 'sample/manifest.json', 'sample/test_task_service.py',
         'sample/before/task_service.py', 'sample/after/task_service.py']
@@ -75,15 +79,40 @@ check(1, '验证样例已跑通', run.get('result') == 'PASS',
 bad = [s['step'] for s in steps if 'command' not in s or 'exit_code' not in s]
 check(1, '步骤日志含命令与退出码', not bad, f'{len(steps)} 步均有 command/exit_code' if not bad else str(bad))
 
+# 验收文档必须引用当前保留的那次真实运行记录，避免文档与证据脱节
+acceptance_text = (ROOT / 'ACCEPTANCE.md').read_text(encoding='utf-8')
+run_id = str(run.get('run_id') or '')
+revision = str(run.get('git_revision') or '')
+check(1, '验收文档引用当前运行记录', bool(run_id) and bool(revision)
+      and run_id in acceptance_text and revision in acceptance_text,
+      f'ACCEPTANCE.md 同时含 run_id {run_id} 与 git_revision {revision}'
+      if run_id in acceptance_text and revision in acceptance_text
+      else f'ACCEPTANCE.md 未引用当前运行的 run_id={run_id} / git_revision={revision}')
+
 # ------------------------------------------------------- 2 MiniMax 实际参与
 platform = ROOT / 'evidence' / 'workbuddy-minimax' / 'platform-record'
 session = read_json('evidence/workbuddy-minimax/platform-record/session.json')
 model = session.get('model', '')
-check(2, '平台记录了本轮模型', bool(model), f"session={session.get('id')} model={model}")
+session_id = session.get('id', '')
+check(2, '平台记录了本轮模型', bool(model), f"session={session_id} model={model}")
+
+# 模型必须是 MiniMax 系列：无关模型名应当失败
+check(2, '模型名属于 MiniMax', 'minimax' in model.lower(),
+      f"model={model!r} 含 minimax" if 'minimax' in model.lower() else f"model={model!r} 与 MiniMax 无关")
+
+# 会话 ID 必须与变更记录关联：错配的会话应当失败
+change_files = sorted(platform.glob('changes-*.json'))
+change_ids = []
+for path in change_files:
+    change_ids.append(json.loads(path.read_text(encoding='utf-8'))['change'].get('conversationId'))
+check(2, '会话 ID 与变更记录关联', bool(change_files) and all(cid == session_id for cid in change_ids),
+      f'{len(change_files)} 份变更记录的 conversationId 均为 {session_id}'
+      if change_files and all(cid == session_id for cid in change_ids)
+      else f'变更记录 conversationId={set(change_ids)} 与 session.id={session_id} 不一致')
 
 # 由平台改动日志重建业务代码，与提交文件比对
 rebuilt = None
-for path in sorted(platform.glob('changes-*.json')):
+for path in change_files:
     change = json.loads(path.read_text(encoding='utf-8'))['change']
     for item in change['files']:
         if item['filePath'].endswith('wb-work' + chr(92) + 'task_service.py'):
@@ -115,11 +144,34 @@ check(2, '开发记录含任务与上下文', has_task and 'task_service.py' in 
 api_files = sorted((ROOT / 'evidence' / 'minimax-api').glob('*-exchange.json'))
 api_ok = False
 api_detail = '无 API 记录'
+api_rounds = []
+api_model = ''
 if api_files:
     api = json.loads(api_files[0].read_text(encoding='utf-8'))
-    api_ok = bool(api.get('endpoint')) and bool(api.get('model')) and bool(api.get('rounds'))
-    api_detail = f"endpoint={api.get('endpoint')} model={api.get('model')} rounds={len(api.get('rounds', []))}"
+    api_rounds = api.get('rounds') or []
+    api_model = api.get('model', '')
+    # 每一轮都必须有请求、原始回复、代码哈希与测试结果
+    required = ('round', 'request', 'response', 'code_sha256', 'tests')
+    missing = [r.get('round') for r in api_rounds
+               if any(not r.get(key) for key in required)]
+    responses_ok = all(r['response'].get('id') and r['response'].get('usage')
+                        for r in api_rounds)
+    api_ok = (bool(api.get('endpoint')) and 'minimax' in api_model.lower()
+              and bool(api_rounds) and not missing and responses_ok)
+    api_detail = (f"endpoint={api.get('endpoint')} model={api_model} rounds={len(api_rounds)}"
+                  + (f" 缺字段的轮次={missing}" if missing else '')
+                  + ('' if responses_ok else ' 存在缺 id/usage 的回复'))
 check(2, '独立 API 记录（佐证）', api_ok, api_detail)
+
+# API 交付副本必须已脱敏，且保留响应 ID、usage、代码与测试证据
+api_text = api_files[0].read_text(encoding='utf-8') if api_files else ''
+api_json = json.loads(api_text) if api_files else {}
+has_code = '```python' in api_text
+has_tests = any(r.get('tests', {}).get('exit_code') is not None for r in api_json.get('rounds', []))
+no_think = '<think>' not in api_text and '</think>' not in api_text
+check(2, 'API 交付副本已脱敏且保留关键证据', no_think and has_code and has_tests and bool(api_json.get('_redaction')),
+      f"无思维链标记={no_think} 保留代码块={has_code} 保留测试结果={has_tests} "
+      f"脱敏说明={bool(api_json.get('_redaction'))}")
 
 # ------------------------------------------------------------- 3 上下文正确
 initial = read_json('evidence/run/context-initial.json')
@@ -176,7 +228,7 @@ check(6, '测试集前后一致', run.get('tests_sha256') == tests_sha,
 
 # ------------------------------------------------------------------ 汇总输出
 print('=' * 78)
-print('官方六项必做项 · 机械判定')
+print('官方六项必做项 · 交付材料一致性自检')
 print('=' * 78)
 current = None
 for item, name, ok, detail in results:
@@ -193,4 +245,6 @@ if failed:
     for item, name, _, detail in failed:
         print(f'  - [{item}] {name}: {detail}')
     sys.exit(1)
-print('全部通过。（仅代表本机按交付材料复核的结果，官方评分以平台记录为准。）')
+print('全部通过。')
+print('说明：这是交付材料一致性自检，不能认证模型服务商来源，也不代替官方验收；')
+print('      官方评分以平台记录的固定提交为准。')

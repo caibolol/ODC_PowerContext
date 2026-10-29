@@ -1,5 +1,5 @@
 {
-  "project": "taskboard-e7367a54547e",
+  "project": "taskboard-76cedaa6e337",
   "task": "TASK-2",
   "spec_entries": [
     {
@@ -11,7 +11,7 @@
         13
       ],
       "title": "状态筛选",
-      "text": "`list_tasks(tasks, status=None)`：status 非 None 时，先 strip().casefold()，\n只允许 todo、done，否则抛出 ValueError。记录中的 status 使用 casefold() 比较，\n缺失 status 的任务视为 todo。筛选后保持顺序，不修改输入。\n输入任务为字典，存在的 status 字段为字符串；筛选参数为字符串或 None。\n\n## TASK-2 规格补充\n更新标记 e7367a54547e：status 参数也接受 None 以外的空白字符串时报错",
+      "text": "`list_tasks(tasks, status=None)`：status 非 None 时，先 strip().casefold()，\n只允许 todo、done，否则抛出 ValueError。记录中的 status 使用 casefold() 比较，\n缺失 status 的任务视为 todo。筛选后保持顺序，不修改输入。\n输入任务为字典，存在的 status 字段为字符串；筛选参数为字符串或 None。\n\n## TASK-2 规格补充\n更新标记 76cedaa6e337：status 参数也接受 None 以外的空白字符串时报错",
       "role": "implement"
     },
     {
@@ -89,8 +89,8 @@
       "path": "spec.md",
       "kind": "spec",
       "tasks": "[\"TASK-2\"]",
-      "content": "# 任务列表规格\n\n## TASK-1 原有行为\n不传筛选条件时返回全部任务，保持输入顺序，返回列表副本，不修改输入。\n\n## TASK-2 状态筛选\n`list_tasks(tasks, status=None)`：status 非 None 时，先 strip().casefold()，\n只允许 todo、done，否则抛出 ValueError。记录中的 status 使用 casefold() 比较，\n缺失 status 的任务视为 todo。筛选后保持顺序，不修改输入。\n输入任务为字典，存在的 status 字段为字符串；筛选参数为字符串或 None。\n\n## TASK-2 规格补充\n更新标记 e7367a54547e：status 参数也接受 None 以外的空白字符串时报错\n",
-      "sha256": "d7099f520fe38d742b4d2128fc74d58801c521d3ffba6cd2e460b3642dfa559c"
+      "content": "# 任务列表规格\n\n## TASK-1 原有行为\n不传筛选条件时返回全部任务，保持输入顺序，返回列表副本，不修改输入。\n\n## TASK-2 状态筛选\n`list_tasks(tasks, status=None)`：status 非 None 时，先 strip().casefold()，\n只允许 todo、done，否则抛出 ValueError。记录中的 status 使用 casefold() 比较，\n缺失 status 的任务视为 todo。筛选后保持顺序，不修改输入。\n输入任务为字典，存在的 status 字段为字符串；筛选参数为字符串或 None。\n\n## TASK-2 规格补充\n更新标记 76cedaa6e337：status 参数也接受 None 以外的空白字符串时报错\n",
+      "sha256": "aeadba8cf260bf55188b2f5efdfff8fab18417bc29a68a1a7c7ec02fb424aa3c"
     },
     {
       "path": "test_task_service.py",
@@ -114,12 +114,12 @@
             "artifact_id": "memory",
             "revision": 2
           },
-          "entry_id": "mem_ent_60635bd32ee840aa94c32e950c0cbb95",
-          "entry_version_id": "mem_ver_55c255904b2f41b19252a842e29088c5"
+          "entry_id": "mem_ent_175a0f55f1694330b16ead32b2772269",
+          "entry_version_id": "mem_ver_fb9eea59161e46079b4babaf6eb2ae24"
         },
         "version": 1,
         "kind": "task-progress",
-        "text": "{\"task\": \"TASK-2\", \"completed\": [\"导入规格、代码与测试到 seekdb\", \"MiniMax 依据上下文完成代码修改\", \"功能测试与回归测试通过\"], \"todo\": [], \"tests\": [{\"stage\": \"before\", \"target_exit\": 1, \"regression_exit\": 0, \"code_sha256\": \"e233a73b2736188e2fe9a8790ca9533a09a4d9dc9ec86110ee17e762a7ded978\"}, {\"stage\": \"after\", \"target_exit\": 0, \"regression_exit\": 0, \"code_sha256\": \"fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4\", \"tests_sha256\": \"2c01d2de7e49987f1ead4e38a0916f4a7f3bae40dcfcf701d24a171435f899a7\"}], \"saved_at\": 1793204124336297900}",
+        "text": "{\"task\": \"TASK-2\", \"completed\": [\"导入规格、代码与测试到 seekdb\", \"MiniMax 依据上下文完成代码修改\", \"功能测试与回归测试通过\"], \"todo\": [], \"tests\": [{\"stage\": \"before\", \"target_exit\": 1, \"regression_exit\": 0, \"code_sha256\": \"e233a73b2736188e2fe9a8790ca9533a09a4d9dc9ec86110ee17e762a7ded978\"}, {\"stage\": \"after\", \"target_exit\": 0, \"regression_exit\": 0, \"code_sha256\": \"fc7ab99516ea1a020618687592277247e51ad1033296b9a2e29bf408cb8a88c4\", \"tests_sha256\": \"2c01d2de7e49987f1ead4e38a0916f4a7f3bae40dcfcf701d24a171435f899a7\"}], \"saved_at\": 1793263493530904400}",
         "state": "active",
         "source_refs": [],
         "artifact_refs": []
@@ -131,12 +131,12 @@
             "artifact_id": "memory",
             "revision": 2
           },
-          "entry_id": "mem_ent_6b9065b1beb3427387caad797920188f",
-          "entry_version_id": "mem_ver_7a6a6245cb7044af93df5b1ecefb4d02"
+          "entry_id": "mem_ent_e4f9ffa2861f4f78bfa2ca8834964518",
+          "entry_version_id": "mem_ver_aa357909ea32434987f49276f18eae7f"
         },
         "version": 1,
         "kind": "task-progress",
-        "text": "{\"task\": \"TASK-2\", \"completed\": [\"导入规格、代码与测试到 seekdb\"], \"todo\": [\"由 MiniMax 依据上下文修改代码\", \"运行功能与回归测试\"], \"tests\": [], \"saved_at\": 1793204122015994200}",
+        "text": "{\"task\": \"TASK-2\", \"completed\": [\"导入规格、代码与测试到 seekdb\"], \"todo\": [\"由 MiniMax 依据上下文修改代码\", \"运行功能与回归测试\"], \"tests\": [], \"saved_at\": 1793263492134389400}",
         "state": "active",
         "source_refs": [],
         "artifact_refs": []
@@ -146,7 +146,7 @@
   "query": {
     "sql": "SELECT path,kind,tasks,content,sha256 FROM sdd_sources WHERE project_id=%s ORDER BY kind,path",
     "parameters": [
-      "taskboard-e7367a54547e"
+      "taskboard-76cedaa6e337"
     ],
     "database_rows": 3,
     "selected_rows": 3,
@@ -154,14 +154,14 @@
       {
         "sql": "SELECT path,kind,tasks,content,sha256 FROM sdd_sources WHERE project_id=%s ORDER BY kind,path",
         "parameters": [
-          "taskboard-e7367a54547e"
+          "taskboard-76cedaa6e337"
         ],
         "rows": 3
       },
       {
         "sql": "SELECT path,entry_id,title,body,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id=%s AND path IN (%s,%s,%s)",
         "parameters": [
-          "taskboard-e7367a54547e",
+          "taskboard-76cedaa6e337",
           "spec",
           "TASK-2",
           "before/task_service.py",
@@ -173,7 +173,7 @@
       {
         "sql": "SELECT path,entry_id,title,body,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id<>%s AND path IN (%s) ORDER BY path,line_start",
         "parameters": [
-          "taskboard-e7367a54547e",
+          "taskboard-76cedaa6e337",
           "spec",
           "TASK-2",
           "spec.md"
@@ -183,7 +183,7 @@
       {
         "sql": "SELECT path,entry_id,title,line_start,line_end FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id IN (%s) AND path IN (%s,%s,%s) ORDER BY path,line_start",
         "parameters": [
-          "taskboard-e7367a54547e",
+          "taskboard-76cedaa6e337",
           "code",
           "list_tasks",
           "before/task_service.py",
@@ -195,7 +195,7 @@
       {
         "sql": "SELECT path,entry_id,title,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND path IN (%s,%s,%s) ORDER BY path,line_start",
         "parameters": [
-          "taskboard-e7367a54547e",
+          "taskboard-76cedaa6e337",
           "test",
           "before/task_service.py",
           "spec.md",

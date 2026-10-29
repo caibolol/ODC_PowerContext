@@ -16,10 +16,11 @@
 | `python context.py scope --key K` | 幂等键 | PowerContext `scope_id` |
 | `python context.py context --project P --task T --scope S` | 项目、任务、scope | JSON：`spec_entries`（implement / preserve，含行号与正文）、`code_targets`（文件、符号、行号）、`tests`（功能 / 回归测试用例）、`progress`（已完成、待办、已有验证结果）、`sources`、`query`（实际执行的 SQL、参数、行数） |
 | `python context.py save --scope S --state F` | 任务状态 JSON（`task`、`completed`、`todo`、`tests`） | PowerContext 写入结果 |
-| `python minimax_agent.py --project P --task T --scope S --output F` | 同上，加输出文件 | MiniMax 修改后的文件；`evidence/minimax-api/<时间>-exchange.json` 与 `-change.diff` |
-| `python run_demo.py [--recorded]` | 无 | 完整验证样例；`evidence/run/` 下的步骤日志与上下文 |
+| `python minimax_agent.py --project P --task T --scope S --output F [--evidence-dir D]` | 同上，加输出文件与证据目录 | MiniMax 修改后的文件；`D`（默认 `evidence/minimax-api/`）下的 `<时间>-exchange.json` 与 `-change.diff` |
+| `python run_demo.py [--recorded]` | 无 | 完整验证样例；证据写入 `evidence/run/<运行编号>/`，成功时另刷新 `evidence/run/` 根目录的「最近一次成功运行」 |
 | `python verify_platform_record.py` | 无 | 由 WorkBuddy 平台改动日志重建本轮 MiniMax 写出的业务代码，并与 `sample/after/task_service.py` 比对（只依赖交付目录内的文件） |
-| `python verify_acceptance.py` | 无 | 机械判定官方六项必做项，逐项给出依据；全部通过退出码 0，任一失败为 1（只依赖交付目录内的文件） |
+| `python verify_acceptance.py` | 无 | 交付材料一致性自检：按官方六项必做项逐项判定，全部通过退出码 0，任一失败为 1（只依赖交付目录内的文件） |
+| `python test_tooling.py` | 无 | 工具自身的单测：输出文件校验（防止测到旧代码）与就绪探测（503 不得判为就绪），共 10 项 |
 
 上下文选择方式：规格按 `## <编号> <标题>` 切分为条目；任务编号对应的条目为 implement，同一规格中的其他条目为 preserve（必须保持的原有行为）；implement 条目中以 `` `name(` `` 引用的函数，在代码符号索引中查到需要修改的文件与行号；调用这些函数的测试用例按测试类分为功能测试与回归测试。规格修改后重新 `ingest`，同一编号的条目随之更新，不返回固定答案。
 
@@ -77,13 +78,19 @@ seekdb 冷启动需要数秒到数十秒（容器内更久）。`run_demo.py` �
 
 重置：每次运行使用新的项目 ID 与 scope，样例在临时副本中修改，仓库文件不变；需要完全清空时删除 seekdb 中的 `minimax_sdd` 库并使用新的 `POWERCONTEXT_HOME`。
 
-原有脚本 `verify_sample.py`（修改前后快照、同一测试文件）与 `verify_context.py`（导入、规格更新、状态复用）仍可单独运行。
+证据与快照的写入规则：
+
+- **交付的业务快照是固定的**：`sample/after/task_service.py` 是本次采用的业务代码，**实时复跑不会覆盖它**。实时调用 MiniMax 得到的代码存进该次运行的证据目录 `evidence/run/<运行编号>/task_service.py`，MiniMax 的交互记录存进同一目录。
+- **失败不破坏已有成功证据**：每次运行的 `steps.json` / `summary.json` / `context-*.json` 都写在 `evidence/run/<运行编号>/` 下；只有该次运行成功时，才会把它们复制到 `evidence/run/` 根目录作为「最近一次成功运行」。失败运行的 `summary.json` 里 `result` 为 `FAIL`。
+- 评审自行复跑后会在 `evidence/run/` 下多出新的运行编号目录，属正常现象。
+
+原有脚本 `verify_sample.py`（修改前后快照、同一测试文件）与 `verify_context.py`（导入、规格更新、状态复用）仍可单独运行；`verify_platform_record.py`（平台改动日志与提交代码比对）、`verify_acceptance.py`（六项必做项一致性自检）与 `test_tooling.py`（工具自身单测）也可单独运行。
 
 ## 证据目录
 
 | 路径 | 内容 |
 | --- | --- |
-| `evidence/run/` | `run_demo.py --recorded` 的完整步骤日志与上下文输出（本机干净环境运行）；`pip-freeze.txt` 为实际依赖，`seekdb-build.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` 为 `verify_acceptance.py` 的判定输出 |
+| `evidence/run/` | `run_demo.py --recorded` 的完整步骤日志与上下文输出（本机干净环境运行）。每次运行的证据存在 `evidence/run/<运行编号>/` 下；**只有成功**的运行才会刷新根目录的 `steps.json` / `summary.json` / `context-*.json`（即「最近一次成功运行」），失败运行不会破坏已有成功证据。`pip-freeze.txt` 为实际依赖，`seekdb-build.txt` 为实际使用的 seekdb 版本与启动参数，`acceptance-check.txt` 为 `verify_acceptance.py` 的判定输出 |
 | `evidence/workbuddy-minimax/` | 本轮由 WorkBuddy 中运行的 MiniMax（M3.1 Flash）产出最终业务代码的完整开发记录：送入的上下文、产出的代码、统一差异、修改前后测试日志、PowerContext 写入与跨服务重启读回；`platform-record/` 为 WorkBuddy 平台自己生成的会话元数据（模型 ID `minimax-m3.1-flash`）与改动日志 |
 | `evidence/minimax-api/` | 更早一次独立 MiniMax API 调用（模型 `MiniMax-M3`）的真实交互记录与产出代码 |
 | `evidence/linux-ci/` | 更早一次 Ubuntu 24.04 + seekdb 官方镜像的干净环境运行证据 |
@@ -98,6 +105,7 @@ seekdb 冷启动需要数秒到数十秒（容器内更久）。`run_demo.py` �
 - 本轮 MiniMax 修改发生在 WorkBuddy 会话内。WorkBuddy 没有整段会话的导出功能，因此没有"平台导出的完整对话文件"；但平台自己生成的改动日志（`evidence/workbuddy-minimax/platform-record/`）逐行保存了本轮写出的业务代码，`python verify_platform_record.py` 可复核其与提交文件逐字节一致。
 - `evidence/linux-ci/pip-freeze-linux.txt` 与 `evidence/workbuddy-minimax/platform-record/changes-*.json` 里能看到队伍私有仓库地址 `caibolol/ODC_PowerContext`：前者是那次 Linux CI 运行的历史记录，后者是平台改动日志中「修改前」那一侧的原文。二者都是历史记录，不是当前安装依赖——当前 `requirements*.txt` 与 README 的安装命令都指向官方公开仓库，`verify_acceptance.py` 会检查这一点。
 - 评审环境若设置了 `http_proxy` / `HTTPS_PROXY`，`context.py` 与 `run_demo.py` 对本机 PowerContext 的请求一律直连（绕过代理），避免代理不转发 localhost 时连接失败。
+- `minimax_agent.py` 与 `run_demo.py` 写入的 MiniMax 交互记录**已脱敏**：回复中的模型私有思维链段落（think 标签包裹）被替换为占位说明，不随作品提交；响应 ID、usage、生成的代码与测试结果原样保留。`verify_acceptance.py` 会检查交付副本中不含该类标记。
 
 技术说明见 [TECHNICAL.md](TECHNICAL.md)，开发记录见 [DEVELOPMENT.md](DEVELOPMENT.md)，验收项与证据对照见 [ACCEPTANCE.md](ACCEPTANCE.md)。
 依赖来源：[PowerContext](https://github.com/oceanbase/powercontext)、[seekdb](https://github.com/oceanbase/seekdb)、[PyMySQL](https://github.com/PyMySQL/PyMySQL)；样例业务代码为本次编写。
