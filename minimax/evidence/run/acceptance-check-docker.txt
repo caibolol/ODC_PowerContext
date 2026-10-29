@@ -8,13 +8,13 @@
   [PASS] 依赖来自公开仓库
          requirements 与 README 安装命令均指向 oceanbase/powercontext
   [PASS] 验证样例已跑通
-         run_id=f6d579e0f14e git_revision=d73c6e2752237d5988338d0902c087650e05e965 result=PASS
+         run_id=cf54b6836b1f git_revision=4229c1c8b2ee2616afefa6a8c77999120bf4bb18 result=PASS
   [PASS] 步骤日志含命令与退出码
          15 步均有 command/exit_code
   [PASS] 验收文档引用归档的真实运行记录
-         文档引用 ['260c4776669a', '2e8d57635521', '3107b6f350ab', '3729a7adf522', '5b3abb06746b', '76cedaa6e337', '8ef54fe34756', '9d19b43b0b8c', 'a0e4dce9e43f', 'afdc946bbe69', 'bd8dc0ba1dce', 'e652ce859b41']，其中 ['260c4776669a', '3107b6f350ab', '5b3abb06746b', 'bd8dc0ba1dce'] 在 evidence/run/ 下有归档，且归档的提交号与文档一致
+         文档引用 ['0a8e51dde0b5', '260c4776669a', '2e8d57635521', '3107b6f350ab', '3729a7adf522', '4b71d88cc7fd', '5b3abb06746b', '76cedaa6e337', '8ef54fe34756', '9d19b43b0b8c', 'a0e4dce9e43f', 'afdc946bbe69', 'bd8dc0ba1dce', 'e652ce859b41', 'f6d579e0f14e']，其中 ['0a8e51dde0b5', '260c4776669a', '3107b6f350ab', '4b71d88cc7fd', 'bd8dc0ba1dce', 'f6d579e0f14e'] 在 evidence/run/ 下有归档，且归档的提交号与文档一致
   [PASS] 最近一次成功运行有归档副本
-         evidence/run/summary.json 的 run_id=f6d579e0f14e 在归档中
+         evidence/run/summary.json 的 run_id=cf54b6836b1f 在归档中
 
 【2】
   [PASS] 平台记录了本轮模型
@@ -33,10 +33,14 @@
          endpoint=https://api.minimaxi.com/v1/chat/completions model=MiniMax-M3 rounds=2
   [PASS] API 交付副本已脱敏且保留关键证据
          无思维链标记=True 保留代码块=True 保留测试结果=True 脱敏说明=True
-  [PASS] 存在实时调用的完整记录
-         共 3 次实时调用记录，其中 3 次测试通过且响应 ID/usage/代码齐备；最新一次 model=MiniMax-M3 response_id=07327bd927e3752c82791112fdbec175 usage=1343 产出=7f3785f54b6a1406…
-  [PASS] 实时产出与交付快照功能等价
-         把交付的测试文件与实时产出的代码放在一起实跑：OK（7 项全通过）；该次运行自记的测试退出码 target=0、regression=0；与交付快照字节不同（仅局部变量名、引号风格与一句错误提示文案不同）
+  [PASS] 归档的 summary.json 均可解析
+         全部归档的 summary.json 均可解析
+  [PASS] 实时成功归档逐份材料自洽
+         共 4 份声明成功且为实时调用的归档（['0a8e51dde0b5', '2e8d57635521', '5b3abb06746b', 'bd8dc0ba1dce']），逐份核对通过；另有 13 份非实时成功归档不参与本项判定
+  [PASS] 最新实时调用按记录时间选出
+         共 4 份实时成功归档；按 exchange 的 time_utc 排序，最新的是 0a8e51dde0b5（20261029T143534Z）
+  [PASS] 最新实时产出通过交付的同一组业务测试
+         把交付的 test_task_service.py 与归档产出放在一起实跑：OK（未要求与交付快照逐字节相同）
 
 【3】
   [PASS] 输出定位规格/代码/测试来源
@@ -59,7 +63,7 @@
          sample/test_task_service.py 归一化哈希一致（recorded d9dad3c12344d83a… == 本地 d9dad3c12344d83a…）
 
 ==============================================================================
-共 22 项检查，通过 22，失败 0
+共 24 项检查，通过 24，失败 0
 全部通过。
 说明：这是交付材料一致性自检，不能认证模型服务商来源，也不代替官方验收；
       官方评分以平台记录的固定提交为准。
