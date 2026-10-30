@@ -69,6 +69,42 @@ def fake_ctx():
     }
 
 
+DELIVERED_TEST = ROOT / 'sample' / 'test_task_service.py'
+DELIVERED_AFTER = ROOT / 'sample' / 'after' / 'task_service.py'
+
+
+def delivered_case_ids(path, classes):
+    """从交付的测试文件里取出指定测试类的用例 ID（context.py 的 '文件#类.用例' 形式）。"""
+    import ast
+    tree = ast.parse(Path(path).read_text(encoding='utf-8'))
+    found = []
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef) and node.name in classes:
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef) and item.name.startswith('test'):
+                    found.append(f'{Path(path).name}#{node.name}.{item.name}')
+    return found
+
+
+def delivery_ctx():
+    """用**交付样例真实的测试正文与完整用例列表**构造上下文。
+
+    验收器会核对「上下文里实际提供的测试正文」与「实际选择的用例 ID」是否就是交付的那份，
+    所以夹具必须用真实交付内容——用简化的替身会让夹具本身不自洽。
+    """
+    ctx = fake_ctx()
+    ctx['sources'] = [
+        {'path': 'before/task_service.py', 'kind': 'code', 'content': OLD_CODE},
+        {'path': 'test_task_service.py', 'kind': 'test',
+         'content': DELIVERED_TEST.read_text(encoding='utf-8')},
+    ]
+    ctx['tests'] = {
+        'functional': delivered_case_ids(DELIVERED_TEST, ['FeatureTests']),
+        'regression': delivered_case_ids(DELIVERED_TEST, ['RegressionTests']),
+    }
+    return ctx
+
+
 def fake_reply(code, rid='resp-1'):
     return {'id': rid, 'model': 'MiniMax-M3', 'usage': {'total_tokens': 100},
             'choices': [{'message': {'content': '```python\n' + code + '```'}}]}
@@ -376,20 +412,21 @@ class RecoveryRoundTests(unittest.TestCase):
         """跑真实 main，把产出组装成一份成功 live 归档。"""
         work = base / 'live'
         work.mkdir()
-        ctx = fake_ctx()
+        ctx = delivery_ctx()
         ctx_path = work / 'ctx.json'
         ctx_path.write_text(json.dumps(ctx, ensure_ascii=False), encoding='utf-8')
         evidence = work / 'ev'
         output = work / 'out' / 'task_service.py'
         output.parent.mkdir()
         calls = []
+        delivered = DELIVERED_AFTER.read_text(encoding='utf-8')
 
         def fake_call(messages, model, base_url, key):
             calls.append(messages)
             if len(calls) == 1:
                 content = '我先确认一下需要改哪个函数，稍等。'      # 没有代码块
             else:
-                content = '```python\n' + NEW_CODE + '```'
+                content = '```python\n' + delivered + '```'
             return ({'model': model, 'messages': messages},
                     {'id': f'resp-{len(calls)}', 'model': 'MiniMax-M3',
                      'usage': {'total_tokens': 100},
@@ -432,9 +469,8 @@ class RecoveryRoundTests(unittest.TestCase):
              'stdout': '', 'stderr': 'OK'},
         ]
         (archive / 'steps.json').write_text(json.dumps(steps, ensure_ascii=False, indent=2), encoding='utf-8')
-        tests_raw = hashlib.sha256((ROOT / 'sample' / 'test_task_service.py').read_bytes()).hexdigest()
-        tests_lf = hashlib.sha256(
-            (ROOT / 'sample' / 'test_task_service.py').read_bytes().replace(b'\r\n', b'\n')).hexdigest()
+        tests_raw = hashlib.sha256(DELIVERED_TEST.read_bytes()).hexdigest()
+        tests_lf = hashlib.sha256(DELIVERED_TEST.read_bytes().replace(b'\r\n', b'\n')).hexdigest()
         summary = {'run_id': self.ARCHIVE, 'git_revision': self.REVISION, 'project': 'p',
                    'task': 'TASK-2', 'minimax': 'live', 'scope_id': 'scp_test',
                    'before_sha256': record['before_sha256'], 'after_sha256': record['after_sha256'],
@@ -759,6 +795,59 @@ def summary_after_empty(run_dir):
     _save(path, summary)
 
 
+def _rewrite_context(run_dir, ctx):
+    """把归档里 context-before-change 的上下文换成新的，并**同步重建首轮 prompt**。
+
+    不重建 prompt 的话，首轮提示就与新上下文对不上，会因「prompt 不一致」而失败——
+    那样命中的是错误的检查项，看不出「测试来源不一致」这条是否真的被检出了。
+    """
+    steps_path = run_dir / 'steps.json'
+    steps = _load(steps_path)
+    for step in steps:
+        if step.get('step') == 'context-before-change':
+            step['stdout'] = json.dumps(ctx, ensure_ascii=False)
+    _save(steps_path, steps)
+    path = _exchange_path(run_dir)
+    record = _load(path)
+    prompt = minimax_agent.build_prompt(ctx)
+    for message in record['rounds'][0]['request']['messages']:
+        if message.get('role') == 'user':
+            message['content'] = prompt
+    _save(path, record)
+
+
+def break_context_test_source(run_dir):
+    """负例 A：上下文实际用的是两项测试，但 summary 宣称的是交付那七项测试的摘要。"""
+    steps = _load(run_dir / 'steps.json')
+    ctx = None
+    for step in steps:
+        if step.get('step') == 'context-before-change':
+            ctx = json.loads(step['stdout'])
+    assert ctx is not None, '归档里没有 context-before-change'
+    # 只换测试正文与用例列表，summary 的摘要保持「交付七项测试」不变
+    ctx['sources'] = [
+        {'path': 'before/task_service.py', 'kind': 'code',
+         'content': next(r['content'] for r in ctx['sources'] if r['path'] == 'before/task_service.py')},
+        {'path': 'test_task_service.py', 'kind': 'test', 'content': TEST_SOURCE},
+    ]
+    ctx['tests'] = {'functional': ['test_task_service.py#FeatureTests.test_filter'],
+                    'regression': ['test_task_service.py#RegressionTests.test_no_filter']}
+    _rewrite_context(run_dir, ctx)
+
+
+def break_context_case_selection(run_dir):
+    """负例 B：上下文用的是交付七项测试的正文，但用例列表只选了其中一部分。"""
+    steps = _load(run_dir / 'steps.json')
+    ctx = None
+    for step in steps:
+        if step.get('step') == 'context-before-change':
+            ctx = json.loads(step['stdout'])
+    assert ctx is not None, '归档里没有 context-before-change'
+    ctx['tests'] = {'functional': ['test_task_service.py#FeatureTests.test_done'],
+                    'regression': ctx['tests']['regression']}
+    _rewrite_context(run_dir, ctx)
+
+
 NEGATIVE_CASES = [
     ('首轮任务 prompt 与上下文不一致', break_first_prompt),
     ('回复中的代码与归档产出对不上', break_reply_code),
@@ -784,7 +873,82 @@ NEGATIVE_CASES = [
     ('删掉 summary.after_sha256', drop_summary_after),
     ('summary.after_sha256 为 None', summary_after_none),
     ('summary.after_sha256 为空字符串', summary_after_empty),
+    # ---- 上下文里的测试来源与用例选择 ----
+    ('上下文实际用的测试正文不是交付那份', break_context_test_source),
+    ('上下文只选了交付测试的一部分用例', break_context_case_selection),
 ]
+
+
+COMPARE_SCRIPT = ROOT.parent.parent / 'compare_acceptance_negatives.py'
+
+
+@unittest.skipUnless(COMPARE_SCRIPT.is_file(),
+                     '对比脚本是工作区根目录的取证工具，不在交付目录内')
+class CompareScriptExitCodeTests(unittest.TestCase):
+    """compare_acceptance_negatives.py 的退出码必须反映实际检测结果。
+
+    这里替换的是「跑负例」这一步（很贵），但**执行的是真实 main()**——
+    退出码的汇总逻辑本身没有被模拟。
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location('compare_script', COMPARE_SCRIPT)
+        cls.script = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.script)
+
+    def make_detect(self, groups):
+        """groups：每组的 (修后负例结果, 修后组合测试是否通过)。
+
+        修前一律报「漏判」——那是修前版本预期存在的漏洞，不该算作修后失败。
+        """
+        state = {'index': 0}
+
+        def detect(old_text, new_text):
+            new_results, new_ok = groups[state['index']]
+            state['index'] += 1
+            old_results = [(name, False) for name, _ in new_results]
+            return old_results, False, '修前日志', new_results, new_ok, '修后日志'
+        return detect
+
+    def run_main(self, groups):
+        import contextlib
+        import io
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            code = self.script.main(argv=[], detect=self.make_detect(groups))
+        return code, buffer.getvalue()
+
+    @staticmethod
+    def results(missed=()):
+        return [('负例 A', True), ('负例 B', True), ('负例 C', True)], None
+
+    def test_all_pass_returns_zero(self):
+        good = [('负例 A', True), ('负例 B', True), ('负例 C', True)]
+        code, output = self.run_main([(good, True), (good, True)])
+        self.assertEqual(code, 0, f'修后全部通过时退出码应为 0，实际 {code}\n{output}')
+
+    def test_missed_detection_returns_nonzero(self):
+        good = [('负例 A', True), ('负例 B', True), ('负例 C', True)]
+        broken = [('负例 A', True), ('负例 B', False), ('负例 C', True)]
+        code, output = self.run_main([(broken, True), (good, True)])
+        self.assertNotEqual(code, 0, f'修后出现漏判时退出码应非零，实际 {code}')
+        self.assertIn('负例 B', output)
+
+    def test_recovery_case_failure_returns_nonzero(self):
+        good = [('负例 A', True), ('负例 B', True), ('负例 C', True)]
+        code, output = self.run_main([(good, False), (good, True)])
+        self.assertNotEqual(code, 0, f'组合测试失败时退出码应非零，实际 {code}')
+        self.assertIn('组合测试', output)
+
+    def test_first_group_failure_not_masked_by_second_success(self):
+        """前一组失败不能被后一组成功覆盖。"""
+        good = [('负例 A', True), ('负例 B', True), ('负例 C', True)]
+        broken = [('负例 A', False), ('负例 B', True), ('负例 C', True)]
+        code, output = self.run_main([(broken, True), (good, True)])
+        self.assertNotEqual(code, 0, f'第一组失败时应非零退出，实际 {code}')
+        self.assertIn('负例 A', output, '失败诊断里应保留第一组漏判的具体项')
 
 
 if __name__ == '__main__':

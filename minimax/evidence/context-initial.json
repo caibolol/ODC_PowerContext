@@ -1,5 +1,5 @@
 {
-  "project": "taskboard-3004e68f1d444069ab50ade05b55de92",
+  "project": "taskboard-48eb2f90d3f4467d8b36885fff421463",
   "task": "TASK-2",
   "spec_entries": [
     {
@@ -89,7 +89,7 @@
   "query": {
     "sql": "SELECT path,kind,tasks,content,sha256 FROM sdd_sources WHERE project_id=%s ORDER BY kind,path",
     "parameters": [
-      "taskboard-3004e68f1d444069ab50ade05b55de92"
+      "taskboard-48eb2f90d3f4467d8b36885fff421463"
     ],
     "database_rows": 3,
     "selected_rows": 3,
@@ -97,14 +97,14 @@
       {
         "sql": "SELECT path,kind,tasks,content,sha256 FROM sdd_sources WHERE project_id=%s ORDER BY kind,path",
         "parameters": [
-          "taskboard-3004e68f1d444069ab50ade05b55de92"
+          "taskboard-48eb2f90d3f4467d8b36885fff421463"
         ],
         "rows": 3
       },
       {
         "sql": "SELECT path,entry_id,title,body,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id=%s AND path IN (%s,%s,%s)",
         "parameters": [
-          "taskboard-3004e68f1d444069ab50ade05b55de92",
+          "taskboard-48eb2f90d3f4467d8b36885fff421463",
           "spec",
           "TASK-2",
           "before/task_service.py",
@@ -116,7 +116,7 @@
       {
         "sql": "SELECT path,entry_id,title,body,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id<>%s AND path IN (%s) ORDER BY path,line_start",
         "parameters": [
-          "taskboard-3004e68f1d444069ab50ade05b55de92",
+          "taskboard-48eb2f90d3f4467d8b36885fff421463",
           "spec",
           "TASK-2",
           "spec.md"
@@ -126,7 +126,7 @@
       {
         "sql": "SELECT path,entry_id,title,line_start,line_end FROM sdd_entries WHERE project_id=%s AND kind=%s AND entry_id IN (%s) AND path IN (%s,%s,%s) ORDER BY path,line_start",
         "parameters": [
-          "taskboard-3004e68f1d444069ab50ade05b55de92",
+          "taskboard-48eb2f90d3f4467d8b36885fff421463",
           "code",
           "list_tasks",
           "before/task_service.py",
@@ -138,7 +138,7 @@
       {
         "sql": "SELECT path,entry_id,title,line_start,line_end,refs FROM sdd_entries WHERE project_id=%s AND kind=%s AND path IN (%s,%s,%s) ORDER BY path,line_start",
         "parameters": [
-          "taskboard-3004e68f1d444069ab50ade05b55de92",
+          "taskboard-48eb2f90d3f4467d8b36885fff421463",
           "test",
           "before/task_service.py",
           "spec.md",

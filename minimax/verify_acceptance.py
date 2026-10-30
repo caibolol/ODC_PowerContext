@@ -18,6 +18,7 @@
   5 状态能够复用  从空状态开始保存任务记录，重启模块后能够读取，并用于后续上下文或任务处理
   6 代码修改有效  同一组目标功能测试在修改前因目标行为未实现而失败，修改后全部通过；相关回归测试也全部通过
 """
+import ast
 import hashlib
 import json
 import os
@@ -32,10 +33,27 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
 from minimax_agent import NoCodeBlockError, build_prompt, extract_code  # noqa: E402
+from run_demo import REGRESSION_TESTS, TARGET_TESTS  # noqa: E402  交付的用例清单
 
 results = []
 # 有效的 SHA-256：64 位小写十六进制
 SHA256_RE = re.compile(r'[0-9a-f]{64}')
+
+
+def test_cases_by_class(path):
+    """从测试文件里取出每个测试类的用例名。"""
+    tree = ast.parse(Path(path).read_text(encoding='utf-8'))
+    result = {}
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            result[node.name] = [item.name for item in node.body
+                                 if isinstance(item, ast.FunctionDef) and item.name.startswith('test')]
+    return result
+
+
+def case_id(raw):
+    """'test_task_service.py#FeatureTests.test_done' → 'FeatureTests.test_done'"""
+    return str(raw).split('#')[-1]
 
 
 def check(item, name, ok, detail):
@@ -87,6 +105,31 @@ check(1, '验证样例已跑通', run.get('result') == 'PASS',
 # 每个步骤都要有命令与退出码
 bad = [s['step'] for s in steps if 'command' not in s or 'exit_code' not in s]
 check(1, '步骤日志含命令与退出码', not bad, f'{len(steps)} 步均有 command/exit_code' if not bad else str(bad))
+
+# 测试日志要记录命令、退出码和**对应代码版本**（官方「四、评分与测试」明文要求）
+step_by_name = {s['step']: s for s in steps}
+test_step_names = ('tests-before-target', 'tests-before-regression',
+                   'tests-after-target', 'tests-after-regression')
+version_missing = [name for name in test_step_names
+                   if not step_by_name.get(name, {}).get('code_sha256')
+                   or not step_by_name.get(name, {}).get('tests_sha256')]
+version_mismatch = []
+if not version_missing:
+    if step_by_name['tests-before-target']['code_sha256'] != run.get('before_sha256'):
+        version_mismatch.append('tests-before-* 的 code_sha256 与 summary.before_sha256 不一致')
+    if step_by_name['tests-after-target']['code_sha256'] != run.get('after_sha256'):
+        version_mismatch.append('tests-after-* 的 code_sha256 与 summary.after_sha256 不一致')
+    if step_by_name['tests-after-target']['tests_sha256'] != run.get('tests_sha256'):
+        version_mismatch.append('测试步骤的 tests_sha256 与 summary.tests_sha256 不一致')
+same_code = (run.get('before_sha256') == run.get('after_sha256'))
+check(1, '测试日志记录对应代码版本',
+      not version_missing and not version_mismatch and not same_code,
+      '四个测试步骤都记录了 code_sha256 与 tests_sha256，且与运行摘要一致；'
+      f'修改前后代码版本不同（{str(run.get("before_sha256"))[:12]}… != {str(run.get("after_sha256"))[:12]}…）'
+      if not version_missing and not version_mismatch and not same_code
+      else (f'缺代码版本的测试步骤：{version_missing}' if version_missing
+            else (f'代码版本对不上：{version_mismatch}' if version_mismatch
+                  else '修改前后的代码版本相同，说明记录的代码版本没区分开')))
 
 # 验收文档必须引用**归档在交付中**的真实运行记录，避免文档与证据脱节。
 # 注意：不能拿根目录的 summary.json 来比——评审自行复跑后它会被更新，
@@ -382,6 +425,41 @@ def live_archive_problems(run_dir, summary, local_tests_raw, local_tests_lf):
         problems.append(f'{name}: 该次运行记录的测试文件哈希与交付的测试文件不一致'
                         f'（记录 {str(recorded_lf or recorded_raw)[:16]}… / 交付 '
                         f'{local_tests_lf[:16]}…）')
+
+    # 6b) 上下文里**实际提供**的测试正文与用例选择，必须与交付的测试文件一致。
+    #     只比 summary 的摘要不够——摘要可以填成另一份文件的；正文与用例才是实际跑的东西。
+    #     口径：正文按 LF 归一化后比对（原始字节与归一化摘要不混用）。
+    if ctx is not None:
+        delivered_test = ROOT / 'sample' / 'test_task_service.py'
+        delivered_cases = test_cases_by_class(delivered_test)
+        for row in ctx.get('sources', []):
+            path = str(row.get('path', ''))
+            if not path.endswith('.py') or 'test' not in path:
+                continue
+            body = row.get('content', '') or ''
+            body_lf = hashlib.sha256(body.replace('\r\n', '\n').encode('utf-8')).hexdigest()
+            if body_lf != local_tests_lf:
+                problems.append(f'{name}: 上下文提供的测试正文与交付的 {delivered_test.name} 不是同一份'
+                                f'（上下文 LF 归一化 {body_lf[:16]}… / 交付 {local_tests_lf[:16]}…）')
+        # 用例选择：交付文件里每个测试类的**全部**用例都必须被选中，不能只挑一部分
+        expected_functional, expected_regression = set(), set()
+        for cls, methods in delivered_cases.items():
+            if cls in TARGET_TESTS:
+                expected_functional.update(f'{cls}.{m}' for m in methods)
+            elif cls in REGRESSION_TESTS:
+                expected_regression.update(f'{cls}.{m}' for m in methods)
+        functional = {case_id(x) for x in ctx.get('tests', {}).get('functional', [])}
+        regression = {case_id(x) for x in ctx.get('tests', {}).get('regression', [])}
+        if functional != expected_functional:
+            problems.append(f'{name}: 上下文选择的功能测试用例与交付文件不一致'
+                            f'（上下文 {sorted(functional)} / 交付 {sorted(expected_functional)}）')
+        if regression != expected_regression:
+            problems.append(f'{name}: 上下文选择的回归测试用例与交付文件不一致'
+                            f'（上下文 {sorted(regression)} / 交付 {sorted(expected_regression)}）')
+        for cid in sorted(functional | regression):
+            if cid.split('.')[0] not in set(TARGET_TESTS) | set(REGRESSION_TESTS):
+                problems.append(f'{name}: 上下文选择了用例清单之外的测试类（{cid}）')
+
     steps_path = run_dir / 'steps.json'
     if steps_path.is_file():
         try:

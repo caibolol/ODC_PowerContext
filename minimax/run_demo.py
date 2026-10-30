@@ -82,11 +82,17 @@ def git_revision():
         return None
 
 
-def step(name, command, env=None, expect=0, parse=True):
+def step(name, command, env=None, expect=0, parse=True, code_sha256=None, tests_sha256=None):
     run = subprocess.run(command, capture_output=True, text=True, encoding='utf-8',
                          env=dict(os.environ, PYTHONIOENCODING='utf-8', **(env or {})))
     record = {'step': name, 'command': command, 'exit_code': run.returncode,
               'stdout': run.stdout, 'stderr': run.stderr}
+    # 测试日志要能看出「这一步跑的是哪版代码、哪份测试」——
+    # 官方「四、评分与测试」要求：测试日志需记录命令、退出码和对应代码版本。
+    if code_sha256:
+        record['code_sha256'] = code_sha256
+    if tests_sha256:
+        record['tests_sha256'] = tests_sha256
     steps.append(record)
     print(f'[{run.returncode}] {name}', flush=True)
     if expect is not None and run.returncode != expect:
@@ -157,14 +163,18 @@ def main():
             step('save-start', [*py, 'save', '--scope', scope_id, '--state', str(start)])
 
             # 3. 修改前：目标功能测试失败（目标行为未实现），回归测试通过
+            #    先记下这一版代码与这份测试的哈希，测试步骤一并写进步骤日志
+            before_sha = sha(work / 'task_service.py')
+            tests_sha = sha(sample / 'test_task_service.py')
             command, env = unittest(work, sample, TARGET_TESTS)
-            before_target = step('tests-before-target', command, env, expect=1, parse=False)
+            before_target = step('tests-before-target', command, env, expect=1, parse=False,
+                                 code_sha256=before_sha, tests_sha256=tests_sha)
             command, env = unittest(work, sample, REGRESSION_TESTS)
-            step('tests-before-regression', command, env, expect=0, parse=False)
+            step('tests-before-regression', command, env, expect=0, parse=False,
+                 code_sha256=before_sha, tests_sha256=tests_sha)
             # 修改前的失败必须是断言失败（行为未实现），不能是导入错误等环境问题
             verdict = before_target['stderr'].strip().splitlines()[-1]
             assert 'failures=' in verdict and 'errors=' not in verdict, verdict
-            before_sha = sha(work / 'task_service.py')
 
             # 4. 重启后的上下文读取已保存的状态，再交给 MiniMax
             resumed = step('context-before-change', ctx_args)
@@ -182,10 +192,11 @@ def main():
 
             # 5. 修改后：同一组目标测试与回归测试全部通过
             command, env = unittest(work, sample, TARGET_TESTS)
-            step('tests-after-target', command, env, expect=0, parse=False)
+            step('tests-after-target', command, env, expect=0, parse=False,
+                 code_sha256=after_sha, tests_sha256=tests_sha)
             command, env = unittest(work, sample, REGRESSION_TESTS)
-            step('tests-after-regression', command, env, expect=0, parse=False)
-            tests_sha = sha(sample / 'test_task_service.py')
+            step('tests-after-regression', command, env, expect=0, parse=False,
+                 code_sha256=after_sha, tests_sha256=tests_sha)
 
             # 6. 保存验证结果；重启后的上下文使用这些结果
             done = Path(temporary) / 'state-done.json'
